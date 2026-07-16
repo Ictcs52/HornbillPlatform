@@ -21,7 +21,9 @@
     dataSource: 'sample', // 'sample' | 'upload'
     uploadedRows: [],
     uploadedSpecies: null,
-    unmatchedRasterFiles: []
+    unmatchedRasterFiles: [],
+    leftCollapsed: false,
+    rightCollapsed: false
   };
 
   let runTimer = null;
@@ -142,6 +144,8 @@
     render();
   }
   function useSampleBoundary() { state.studyArea = 'western'; render(); }
+  function toggleLeftPanel() { state.leftCollapsed = !state.leftCollapsed; render(); }
+  function toggleRightPanel() { state.rightCollapsed = !state.rightCollapsed; render(); }
   function updateLayerField(id, field, value) {
     state.layers = state.layers.map(l => l.id === id ? { ...l, [field]: value } : l);
     render();
@@ -272,7 +276,7 @@
     setLang, setSettingsTab, setMapTab, toggleSpecies, selectStudyArea, validateData,
     useSampleData, useSampleBoundary, removeLayer, removeRasterFromLayer,
     addLayer, toggleExport, generateReport, runModel, toggleMapFullscreen,
-    dismissUnmatchedFile
+    dismissUnmatchedFile, toggleLeftPanel, toggleRightPanel
   };
 
   document.addEventListener('click', (e) => {
@@ -632,7 +636,7 @@
           <div class="run-log-lines">${v.lastLogLines.map(line => `<div>› ${esc(line)}</div>`).join('')}</div>
         </div>` : ''}`;
 
-    document.getElementById('colLeft').innerHTML = html;
+    document.getElementById('colLeftContent').innerHTML = html;
   }
 
   function renderRightCol(v) {
@@ -674,7 +678,7 @@
         </div>`).join('') : `<div class="results-summary">${esc(t.results.noResults)}</div>`}
     </div>`;
 
-    document.getElementById('colRight').innerHTML = html;
+    document.getElementById('colRightContent').innerHTML = html;
   }
 
   function renderMapChrome(v) {
@@ -782,12 +786,23 @@
     }
   }
 
+  function renderCollapse() {
+    const grid = document.querySelector('.grid');
+    grid.style.setProperty('--left-w', state.leftCollapsed ? '20px' : '330px');
+    grid.style.setProperty('--right-w', state.rightCollapsed ? '20px' : '300px');
+    document.getElementById('colLeft').classList.toggle('collapsed', state.leftCollapsed);
+    document.getElementById('colRight').classList.toggle('collapsed', state.rightCollapsed);
+    document.getElementById('toggleLeftBtn').textContent = state.leftCollapsed ? '›' : '‹';
+    document.getElementById('toggleRightBtn').textContent = state.rightCollapsed ? '‹' : '›';
+  }
+
   function render() {
     const v = computeVals();
     renderTop(v);
     renderLeftCol(v);
     renderRightCol(v);
     renderMapChrome(v);
+    renderCollapse();
     updateLeafletLayers(v);
   }
 

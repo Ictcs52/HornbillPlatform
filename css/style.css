@@ -41,14 +41,28 @@ a:hover { color: #2f5570; }
 
 .grid {
   display: grid;
-  grid-template-columns: 330px 1fr 300px;
+  grid-template-columns: var(--left-w, 330px) 1fr var(--right-w, 300px);
   gap: 16px;
   padding: 20px;
   align-items: start;
+  transition: grid-template-columns 0.2s ease;
 }
 @media (max-width: 1000px) {
   .grid { grid-template-columns: 1fr; }
 }
+
+.side-col { position: relative; }
+.col-toggle {
+  position: absolute; top: 0; z-index: 5;
+  width: 20px; height: 40px; border: 1px solid #e9e4d6; border-radius: 6px;
+  background: #ffffff; color: #6b7062; cursor: pointer; font-size: 13px; line-height: 1;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.col-toggle:hover { background: #f2ede3; }
+.col-toggle-left { right: -10px; }
+.col-toggle-right { left: -10px; }
+.side-col.collapsed #colLeftContent,
+.side-col.collapsed #colRightContent { display: none; }
 
 .card {
   background: #ffffff;
