@@ -1,25 +1,67 @@
 <!DOCTYPE html>
-<html lang="th">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Watershed Forest Map</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hornbill Habitat Model × GIS</title>
 
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-
-    <style>
-        body { margin: 0; padding: 0; }
-        /* กำหนดขนาดของแผนที่ให้เต็มหน้าจอ */
-        #map { width: 100vw; height: 100vh; }
-    </style>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
-    <div id="map"></div>
+<div id="app">
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="script.js"></script>
+  <div class="topbar">
+    <div class="topbar-bg"></div>
+    <div class="topbar-row">
+      <div class="topbar-titles">
+        <div class="eyebrow">RESEARCH PROTOTYPE</div>
+        <div class="title" id="appTitle"></div>
+        <div class="subtitle" id="appSubtitle"></div>
+      </div>
+      <div class="lang-toggle">
+        <div id="langEnBtn" data-action="setLang" data-id="en">EN</div>
+        <div id="langThBtn" data-action="setLang" data-id="th">TH</div>
+      </div>
+    </div>
+    <div class="topbar-rule"></div>
+  </div>
+
+  <div class="grid">
+
+    <div id="colLeft"></div>
+
+    <div id="colMap">
+      <div class="card map-card">
+        <div class="panel-head">
+          <div class="badge badge-green">05</div>
+          <div class="panel-title" id="mapPanelTitle"></div>
+        </div>
+        <div class="map-tabs">
+          <div class="map-tab" id="mapTabDist" data-action="setMapTab" data-id="distribution"></div>
+          <div class="map-tab" id="mapTabCompare" data-action="setMapTab" data-id="compare"></div>
+        </div>
+
+        <div id="leafletMap" style="width:100%;height:420px;border-radius:6px;background:#eae3d0"></div>
+        <div id="noResultsBox" class="no-results" style="display:none"></div>
+
+        <div id="mapGradient" class="map-gradient" style="display:none"></div>
+        <div id="mapScaleLabels" class="map-scale-labels" style="display:none"></div>
+        <div id="mapLegendSpecies" class="map-legend-species"></div>
+        <div id="mapRiskNote" class="risk-note" style="display:none"></div>
+        <div class="map-note" id="mapRealNote"></div>
+      </div>
+    </div>
+
+    <div id="colRight"></div>
+
+  </div>
+</div>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="js/data.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
