@@ -10,7 +10,6 @@
     layers: ENV_LAYERS.map(l => ({ ...l })),
     settings: { resolution: '100', testSplit: 25, regularization: 1.0, scenario: 'current', forestLoss: 15, replicates: 3 },
     dataValidated: false,
-    layersChecked: false,
     running: false,
     runProgress: 0,
     modelRun: false,
@@ -21,7 +20,8 @@
     boundaries: null,
     dataSource: 'sample', // 'sample' | 'upload'
     uploadedRows: [],
-    uploadedSpecies: null
+    uploadedSpecies: null,
+    unmatchedRasterFiles: []
   };
 
   let runTimer = null;
@@ -141,22 +141,68 @@
     state.dataValidated = true;
     render();
   }
-  function checkLayers() {
-    state.layers = state.layers.map(l => ({ ...l, status: 'ready' }));
-    state.layersChecked = true;
-    render();
-  }
-  function useSampleLayers() { checkLayers(); }
   function useSampleBoundary() { state.studyArea = 'western'; render(); }
   function updateLayerField(id, field, value) {
     state.layers = state.layers.map(l => l.id === id ? { ...l, [field]: value } : l);
     render();
   }
-  function toggleLayerStatus(id) {
-    state.layers = state.layers.map(l => l.id === id ? { ...l, status: l.status === 'ready' ? 'not_loaded' : 'ready' } : l);
+  function removeLayer(id) { state.layers = state.layers.filter(l => l.id !== id); render(); }
+  function removeRasterFromLayer(id) {
+    state.layers = state.layers.map(l => l.id === id ? { ...l, status: 'not_loaded', raster: null, fileName: null, sizeMB: null, error: null } : l);
     render();
   }
-  function removeLayer(id) { state.layers = state.layers.filter(l => l.id !== id); render(); }
+
+  // --- Environmental layer raster uploads (GeoTIFF, parsed entirely client-side) ---
+  function assignRasterToLayer(layerId, file) {
+    state.layers = state.layers.map(l => l.id === layerId
+      ? { ...l, status: 'processing', raster: null, fileName: file.name, sizeMB: file.size / (1024 * 1024), error: null }
+      : l);
+    render();
+    parseGeoTiffFile(file).then(raster => {
+      state.layers = state.layers.map(l => l.id === layerId ? { ...l, status: 'ready', raster } : l);
+      render();
+    }).catch(err => {
+      state.layers = state.layers.map(l => l.id === layerId ? { ...l, status: 'error', raster: null, error: err.message } : l);
+      render();
+    });
+  }
+
+  function handleRasterFiles(fileList) {
+    const files = Array.from(fileList || []).filter(f => /\.tiff?$/i.test(f.name));
+    files.forEach(file => {
+      const guessed = guessLayerForFilename(file.name, state.layers);
+      if (guessed) {
+        assignRasterToLayer(guessed.id, file);
+        return;
+      }
+      const tempId = 'unmatched_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+      state.unmatchedRasterFiles = [...state.unmatchedRasterFiles, { tempId, fileName: file.name, sizeMB: file.size / (1024 * 1024), status: 'processing', raster: null }];
+      render();
+      parseGeoTiffFile(file).then(raster => {
+        state.unmatchedRasterFiles = state.unmatchedRasterFiles.map(u => u.tempId === tempId ? { ...u, status: 'ready', raster } : u);
+        render();
+      }).catch(err => {
+        state.unmatchedRasterFiles = state.unmatchedRasterFiles.map(u => u.tempId === tempId ? { ...u, status: 'error', error: err.message } : u);
+        render();
+      });
+    });
+  }
+
+  function assignUnmatchedToLayer(tempId, layerId) {
+    if (!layerId) return;
+    const entry = state.unmatchedRasterFiles.find(u => u.tempId === tempId);
+    if (!entry || !entry.raster) return;
+    state.unmatchedRasterFiles = state.unmatchedRasterFiles.filter(u => u.tempId !== tempId);
+    state.layers = state.layers.map(l => l.id === layerId
+      ? { ...l, status: 'ready', raster: entry.raster, fileName: entry.fileName, sizeMB: entry.sizeMB, error: null }
+      : l);
+    render();
+  }
+
+  function dismissUnmatchedFile(tempId) {
+    state.unmatchedRasterFiles = state.unmatchedRasterFiles.filter(u => u.tempId !== tempId);
+    render();
+  }
   function addLayer() {
     const id = 'custom' + Date.now();
     state.layers = [...state.layers, { id, name: 'New Variable', group: 'Vegetation', resolution: '100m', source: 'Custom', status: 'not_loaded' }];
@@ -224,8 +270,9 @@
 
   const ACTIONS = {
     setLang, setSettingsTab, setMapTab, toggleSpecies, selectStudyArea, validateData,
-    useSampleData, useSampleLayers, useSampleBoundary, toggleLayerStatus, removeLayer,
-    addLayer, toggleExport, generateReport, runModel, toggleMapFullscreen
+    useSampleData, useSampleBoundary, removeLayer, removeRasterFromLayer,
+    addLayer, toggleExport, generateReport, runModel, toggleMapFullscreen,
+    dismissUnmatchedFile
   };
 
   document.addEventListener('click', (e) => {
@@ -253,7 +300,22 @@
       updateSetting(field, numeric ? Number(el.value) : el.value);
     } else if (onchange === 'fileUpload') {
       onFileUpload(e);
+    } else if (onchange === 'rasterUpload') {
+      handleRasterFiles(el.files);
+      el.value = '';
+    } else if (onchange === 'assignUnmatchedRaster') {
+      assignUnmatchedToLayer(el.getAttribute('data-temp-id'), el.value);
     }
+  });
+
+  document.addEventListener('dragover', (e) => {
+    if (e.target.closest('#rasterDropzone')) e.preventDefault();
+  });
+  document.addEventListener('drop', (e) => {
+    const zone = e.target.closest('#rasterDropzone');
+    if (!zone) return;
+    e.preventDefault();
+    handleRasterFiles(e.dataTransfer.files);
   });
 
   document.addEventListener('input', (e) => {
@@ -306,6 +368,29 @@
 
     const legendSpecies = selectedSpecies.map(sp => ({ displayName: isTh ? sp.thai : sp.common, color: sp.color }));
 
+    const allOccurrencePoints = activeSpecies.flatMap(sp => sp.points);
+    const loadedLayers = st.layers.filter(l => l.raster);
+    let resMatch = true, crsMatch = true;
+    if (loadedLayers.length > 1) {
+      const refRes = loadedLayers[0].raster.resX;
+      const refEpsg = loadedLayers[0].raster.epsg;
+      loadedLayers.forEach(l => {
+        if (refRes && Math.abs(l.raster.resX - refRes) / refRes > 0.02) resMatch = false;
+        if (l.raster.epsg !== refEpsg) crsMatch = false;
+      });
+    }
+    const layersSummary = {
+      loadedCount: loadedLayers.length, totalCount: st.layers.length,
+      resMatch, crsMatch, hasMultiple: loadedLayers.length > 1
+    };
+
+    const STATUS_STYLE = {
+      ready: { label: t.layers.ready, color: '#4f7942' },
+      processing: { label: isTh ? 'กำลังอ่านไฟล์…' : 'Reading file…', color: '#8a6a4f' },
+      error: { label: isTh ? 'อ่านไฟล์ไม่สำเร็จ' : 'Failed to read', color: '#c1573a' },
+      not_loaded: { label: t.layers.notLoaded, color: '#b5652f' }
+    };
+
     const groupOrder = ['Topography', 'Vegetation', 'Climate', 'Human Disturbance'];
     const extraGroups = [...new Set(st.layers.map(l => l.group))].filter(g => !groupOrder.includes(g));
     const layerGroups = [...groupOrder, ...extraGroups].map(g => ({
@@ -314,18 +399,34 @@
         const m = String(l.resolution).match(/^([\d.]*)\s*(.*)$/) || [];
         const resNum = m[1] || '';
         const resUnit = m[2] || '';
+        const style = STATUS_STYLE[l.status] || STATUS_STYLE.not_loaded;
+        let outsideCount = null;
+        if (l.raster) outsideCount = countPointsOutsideRaster(l.raster, allOccurrencePoints);
         return {
           ...l, resNum, resUnit,
-          statusLabel: l.status === 'ready' ? t.layers.ready : t.layers.notLoaded,
-          statusColor: l.status === 'ready' ? '#4f7942' : '#b5652f'
+          statusLabel: style.label, statusColor: style.color,
+          sizeWarning: l.sizeMB && l.sizeMB > RASTER_SIZE_WARNING_MB,
+          sizeMBFmt: l.sizeMB ? l.sizeMB.toFixed(1) : null,
+          crsLabel: l.raster ? epsgLabel(l.raster.epsg) : null,
+          bboxLabel: l.raster ? l.raster.bbox.map(v => v.toFixed(2)).join(', ') : null,
+          rangeLabel: l.raster && l.raster.min !== null ? l.raster.min.toFixed(2) + ' – ' + l.raster.max.toFixed(2) : null,
+          nodataLabel: l.raster && l.raster.nodata !== null ? String(l.raster.nodata) : null,
+          outsideCount
         };
       })
     })).filter(g => g.items.length);
 
+    const unmatchedFiles = st.unmatchedRasterFiles.map(u => ({
+      ...u,
+      statusLabel: u.status === 'ready' ? (isTh ? 'อ่านไฟล์แล้ว — เลือกตัวแปรด้านล่าง' : 'Parsed — choose a variable below')
+        : u.status === 'error' ? (isTh ? 'อ่านไฟล์ไม่สำเร็จ' : 'Failed to read')
+        : (isTh ? 'กำลังอ่านไฟล์…' : 'Reading file…')
+    }));
+
     const validRecordsFmt = selectedSpecies.reduce((sum, sp) => sum + sp.total, 0).toLocaleString();
     const validNote = '✓ ' + validRecordsFmt + (isTh ? ' ระเบียนที่ผ่านการตรวจสอบจาก ' + selectedCount + ' ชนิด' : ' valid records across ' + selectedCount + ' species');
 
-    const canRun = st.dataValidated && st.layersChecked && selectedCount > 0;
+    const canRun = st.dataValidated && st.layers.some(l => l.raster) && selectedCount > 0;
     const runBtnLabel = st.running ? t.simulation.running : (st.modelRun ? t.simulation.runAgain : t.simulation.run);
     const runBtnColor = st.running ? '#8a8f80' : '#4f7942';
     const canRunNote = st.running ? t.simulation.notePipeline : (st.modelRun ? t.simulation.noteComplete : (canRun ? t.simulation.noteReady : t.simulation.noteBlocked));
@@ -348,7 +449,8 @@
     return {
       t, isTh, studyArea,
       langEnActive: st.lang === 'en', langThActive: st.lang === 'th',
-      speciesCards, studyAreaOptions, legendSpecies, layerGroups,
+      speciesCards, studyAreaOptions, legendSpecies, layerGroups, layersSummary, unmatchedFiles,
+      layerAssignOptions: st.layers.map(l => ({ id: l.id, displayName: l.name })),
       uploads: st.uploads.map(u => {
         let statusLabel;
         let color;
@@ -410,25 +512,54 @@
 
     html += `<div class="card accent-brown">
       <div class="panel-head"><div class="badge badge-brown">02</div><div class="panel-title">${esc(t.envLayers.title)}</div></div>
+
+      <div class="raster-summary">${v.layersSummary.loadedCount}/${v.layersSummary.totalCount} ${esc(t.layers.loadedLabel)}${v.layersSummary.hasMultiple ? '  •  ' + esc(t.layers.resolution) + ' ' + (v.layersSummary.resMatch ? '✓' : '✗ ' + esc(t.layers.mismatch)) + '  •  CRS ' + (v.layersSummary.crsMatch ? '✓' : '✗ ' + esc(t.layers.mismatch)) : ''}</div>
+
+      <label for="rasterUpload" id="rasterDropzone" class="dropzone raster-dropzone">
+        <div class="dropzone-label">${esc(t.layers.rasterDropzone)}</div>
+      </label>
+      <input id="rasterUpload" type="file" accept=".tif,.tiff" multiple style="display:none" data-onchange="rasterUpload">
+
+      ${v.unmatchedFiles.length ? `
+      <div class="unmatched-files">
+        ${v.unmatchedFiles.map(u => `
+          <div class="unmatched-row">
+            <div class="unmatched-name">${esc(u.fileName)}</div>
+            <div class="unmatched-status" style="color:${u.status === 'error' ? '#c1573a' : '#8a6a4f'}">${esc(u.statusLabel)}</div>
+            ${u.status === 'ready' ? `
+              <select data-onchange="assignUnmatchedRaster" data-temp-id="${u.tempId}">
+                <option value="">${esc(t.layers.chooseVariable)}</option>
+                ${v.layerAssignOptions.map(o => `<option value="${o.id}">${esc(o.displayName)}</option>`).join('')}
+              </select>` : ''}
+            <div class="layer-remove" data-action="dismissUnmatchedFile" data-id="${u.tempId}">×</div>
+          </div>`).join('')}
+      </div>` : ''}
+
       ${v.layerGroups.map(g => `
         <div class="group-label">${esc(g.displayName)}</div>
         ${g.items.map(l => `
           <div class="layer-row">
             <div class="layer-top">
               <input value="${esc(l.name)}" data-onchange="layerField" data-id="${l.id}" data-field="name">
-              <div class="layer-status" style="color:${l.statusColor}" data-action="toggleLayerStatus" data-id="${l.id}">${esc(l.statusLabel)}</div>
+              <div class="layer-status" style="color:${l.statusColor}">${esc(l.statusLabel)}</div>
               <div class="layer-remove" data-action="removeLayer" data-id="${l.id}">×</div>
             </div>
-            <div class="layer-sub">
-              <input class="res-num" type="number" value="${esc(l.resNum)}" data-onchange="layerResolution" data-id="${l.id}">
-              <input class="res-unit" value="${esc(l.resUnit)}" data-onchange="layerResolution" data-id="${l.id}">
-              <input class="res-source" value="${esc(l.source)}" data-onchange="layerField" data-id="${l.id}" data-field="source">
-            </div>
+            ${l.raster ? `
+              <div class="raster-info">
+                <div class="raster-info-file">${esc(l.fileName)} ${l.sizeMBFmt ? '(' + l.sizeMBFmt + ' MB' + (l.sizeWarning ? ' ⚠' : '') + ')' : ''}</div>
+                <div class="raster-info-row">${esc(t.layers.resolution)}: ${l.raster.resX.toFixed(4)}  |  CRS: ${esc(l.crsLabel)}</div>
+                <div class="raster-info-row">${esc(t.layers.valueRange)}: ${esc(l.rangeLabel)}  |  NoData: ${esc(l.nodataLabel)}</div>
+                <div class="raster-info-row">${esc(t.layers.extent)}: ${esc(l.bboxLabel)}</div>
+                ${l.outsideCount > 0 ? `<div class="raster-warning">⚠ ${l.outsideCount.toLocaleString()} ${esc(t.layers.pointsOutside)}</div>` : ''}
+                <div class="raster-change" data-action="removeRasterFromLayer" data-id="${l.id}">${esc(t.layers.changeFile)}</div>
+              </div>` : l.status === 'error' ? `<div class="raster-warning">⚠ ${esc(l.error || '')}</div>` : `
+              <div class="layer-sub">
+                <input class="res-num" type="number" value="${esc(l.resNum)}" data-onchange="layerResolution" data-id="${l.id}">
+                <input class="res-unit" value="${esc(l.resUnit)}" data-onchange="layerResolution" data-id="${l.id}">
+                <input class="res-source" value="${esc(l.source)}" data-onchange="layerField" data-id="${l.id}" data-field="source">
+              </div>`}
           </div>`).join('')}
       `).join('')}
-      <div style="margin-top:6px">
-        <div class="btn btn-green" style="width:100%" data-action="useSampleLayers">${esc(t.samples.useSample)}</div>
-      </div>
       <div class="geofabrik-note">${esc(t.envLayers.geofabrikNote)} <a href="https://download.geofabrik.de/asia/thailand.html" target="_blank" rel="noopener">thailand-latest.osm.pbf ↗</a></div>
     </div>`;
 

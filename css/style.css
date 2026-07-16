@@ -103,6 +103,19 @@ a:hover { color: #2f5570; }
 .layer-sub input.res-source { flex: 1; font-size: 10.5px; color: #8a8f80; border: none; background: transparent; padding: 2px; margin-left: 4px; border-left: 1px solid #eee9db; padding-left: 6px; }
 .geofabrik-note { font-size: 10px; color: #8a8f80; margin-top: 8px; line-height: 1.5; }
 
+.raster-summary { font-size: 10.5px; color: #6b7062; font-weight: 600; margin-bottom: 8px; }
+.raster-dropzone { margin-top: 0; margin-bottom: 12px; }
+.unmatched-files { margin-bottom: 10px; }
+.unmatched-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px dashed #cbb98a; border-radius: 6px; margin-bottom: 5px; flex-wrap: wrap; }
+.unmatched-name { font-family: ui-monospace, monospace; font-size: 10.5px; flex: 1 1 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.unmatched-status { font-size: 10px; font-weight: 600; }
+.unmatched-row select { font-size: 10.5px; padding: 3px 4px; border: 1px solid #e6e1d2; border-radius: 4px; }
+.raster-info { margin-top: 5px; font-size: 10px; color: #6b7062; line-height: 1.6; }
+.raster-info-file { font-family: ui-monospace, monospace; font-weight: 600; color: #23281f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.raster-info-row { color: #8a8f80; }
+.raster-warning { color: #c1573a; font-weight: 600; margin-top: 3px; }
+.raster-change { color: #4f7942; font-weight: 600; cursor: pointer; margin-top: 4px; }
+
 .area-row { border: 2px solid #e6e1d2; border-radius: 7px; padding: 9px 10px; margin-bottom: 6px; cursor: pointer; }
 .area-row.selected { border-color: #4f7942; }
 .area-name { font-size: 12px; font-weight: 700; }

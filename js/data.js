@@ -19,19 +19,22 @@ const STUDY_AREAS = [
   { id: 'southern', name: 'Southern Peninsular Forest Corridor', thai: 'ผืนป่าคาบสมุทรภาคใต้' }
 ];
 
+// `keywords` are used to auto-match an uploaded raster filename to a layer
+// (see js/raster.js). `status` starts 'not_loaded' for every layer since it
+// now reflects whether a real raster file has actually been attached.
 const ENV_LAYERS = [
-  { id: 'dem', name: 'Elevation (DEM)', group: 'Topography', resolution: '30m', source: 'SRTM', status: 'ready' },
-  { id: 'slope', name: 'Slope', group: 'Topography', resolution: '30m', source: 'Derived from DEM', status: 'ready' },
-  { id: 'aspect', name: 'Aspect', group: 'Topography', resolution: '30m', source: 'Derived from DEM', status: 'ready' },
-  { id: 'ndvi', name: 'NDVI (Vegetation Index)', group: 'Vegetation', resolution: '100m', source: 'Sentinel-2 composite', status: 'ready' },
-  { id: 'forestcover', name: 'Forest Cover Type', group: 'Vegetation', resolution: '100m', source: 'RFD Forest Cover 2024', status: 'ready' },
-  { id: 'canopy', name: 'Canopy Density', group: 'Vegetation', resolution: '100m', source: 'LiDAR-derived proxy', status: 'not_loaded' },
-  { id: 'patchsize', name: 'Forest Patch Size', group: 'Vegetation', resolution: '100m', source: 'Derived from Forest Cover', status: 'ready' },
-  { id: 'rainfall', name: 'Mean Annual Rainfall', group: 'Climate', resolution: '1km', source: 'TMD interpolated', status: 'ready' },
-  { id: 'temperature', name: 'Mean Temperature', group: 'Climate', resolution: '1km', source: 'WorldClim', status: 'ready' },
-  { id: 'road', name: 'Distance to Road', group: 'Human Disturbance', resolution: '30m', source: 'OSM (Geofabrik)', status: 'ready' },
-  { id: 'settlement', name: 'Distance to Settlement', group: 'Human Disturbance', resolution: '30m', source: 'OSM (Geofabrik)', status: 'not_loaded' },
-  { id: 'river', name: 'Distance to River', group: 'Human Disturbance', resolution: '30m', source: 'OSM (Geofabrik)', status: 'ready' }
+  { id: 'dem', name: 'Elevation (DEM)', group: 'Topography', resolution: '30m', source: 'SRTM', status: 'not_loaded', keywords: ['dem', 'elevation', 'elev'] },
+  { id: 'slope', name: 'Slope', group: 'Topography', resolution: '30m', source: 'Derived from DEM', status: 'not_loaded', keywords: ['slope'] },
+  { id: 'aspect', name: 'Aspect', group: 'Topography', resolution: '30m', source: 'Derived from DEM', status: 'not_loaded', keywords: ['aspect'] },
+  { id: 'ndvi', name: 'NDVI (Vegetation Index)', group: 'Vegetation', resolution: '100m', source: 'Sentinel-2 composite', status: 'not_loaded', keywords: ['ndvi'] },
+  { id: 'forestcover', name: 'Forest Cover Type', group: 'Vegetation', resolution: '100m', source: 'RFD Forest Cover 2024', status: 'not_loaded', keywords: ['forestcover', 'forest_cover', 'forest_type', 'landcover'] },
+  { id: 'canopy', name: 'Canopy Density', group: 'Vegetation', resolution: '100m', source: 'LiDAR-derived proxy', status: 'not_loaded', keywords: ['canopy'] },
+  { id: 'patchsize', name: 'Forest Patch Size', group: 'Vegetation', resolution: '100m', source: 'Derived from Forest Cover', status: 'not_loaded', keywords: ['patchsize', 'patch_size', 'forestpatch'] },
+  { id: 'rainfall', name: 'Mean Annual Rainfall', group: 'Climate', resolution: '1km', source: 'TMD interpolated', status: 'not_loaded', keywords: ['rainfall', 'rain', 'precip'] },
+  { id: 'temperature', name: 'Mean Temperature', group: 'Climate', resolution: '1km', source: 'WorldClim', status: 'not_loaded', keywords: ['temperature', 'temp'] },
+  { id: 'road', name: 'Distance to Road', group: 'Human Disturbance', resolution: '30m', source: 'OSM (Geofabrik)', status: 'not_loaded', keywords: ['road', 'dist_road', 'distance_to_road'] },
+  { id: 'settlement', name: 'Distance to Settlement', group: 'Human Disturbance', resolution: '30m', source: 'OSM (Geofabrik)', status: 'not_loaded', keywords: ['settlement', 'dist_settlement', 'village'] },
+  { id: 'river', name: 'Distance to River', group: 'Human Disturbance', resolution: '30m', source: 'OSM (Geofabrik)', status: 'not_loaded', keywords: ['river', 'water', 'dist_water', 'stream'] }
 ];
 
 const VARIABLE_CONTRIBUTION = [
