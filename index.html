@@ -43,7 +43,10 @@
           <div class="map-tab" id="mapTabCompare" data-action="setMapTab" data-id="compare"></div>
         </div>
 
-        <div id="leafletMap" style="width:100%;height:420px;border-radius:6px;background:#eae3d0"></div>
+        <div id="mapWrap" class="map-wrap">
+          <div id="leafletMap" style="width:100%;height:420px;border-radius:6px;background:#eae3d0"></div>
+          <button id="mapFullscreenBtn" type="button" class="map-fullscreen-btn" data-action="toggleMapFullscreen" title="Toggle fullscreen">⤢</button>
+        </div>
         <div id="noResultsBox" class="no-results" style="display:none"></div>
 
         <div id="mapGradient" class="map-gradient" style="display:none"></div>

@@ -135,6 +135,19 @@ a:hover { color: #2f5570; }
 .map-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
 .map-tab { flex: 1; text-align: center; font-size: 12px; font-weight: 600; padding: 9px; border-radius: 7px; cursor: pointer; background: #f0ede1; color: #6b7062; }
 .map-tab.active { background: #4f7942; color: #fff; }
+
+.map-wrap { position: relative; }
+.map-fullscreen-btn {
+  position: absolute; top: 8px; right: 8px; z-index: 1200;
+  width: 32px; height: 32px; border: 1px solid #d8d2bf; border-radius: 6px;
+  background: #ffffff; color: #23281f; font-size: 15px; line-height: 1; cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+.map-fullscreen-btn:hover { background: #f2ede3; }
+.map-wrap.fullscreen {
+  position: fixed; inset: 0; z-index: 9999; background: #ffffff; padding: 12px;
+}
+.map-wrap.fullscreen #leafletMap { height: 100% !important; border-radius: 0; }
 .map-note { font-size: 10px; color: #8a8f80; margin-top: 8px; line-height: 1.5; font-style: italic; }
 .map-gradient { height: 12px; border-radius: 4px; margin-top: 12px; }
 .map-scale-labels { display: flex; justify-content: space-between; font-size: 11px; color: #8a8f80; margin-top: 4px; }

@@ -18,10 +18,76 @@
     exportSel: { pdf: true, png: true, geotiff: false, csv: true },
     reportGenerated: false,
     uploads: [],
-    boundaries: null
+    boundaries: null,
+    dataSource: 'sample', // 'sample' | 'upload'
+    uploadedRows: [],
+    uploadedSpecies: null
   };
 
   let runTimer = null;
+
+  const UPLOAD_PALETTE = ['#1f9e4a', '#d9a319', '#e8552a', '#1f9bd9', '#bb32c4', '#4f7942', '#a85a34', '#3d6a8a', '#8a7c3f', '#b5652f'];
+
+  function matchKnownSpecies(name) {
+    const n = name.trim().toLowerCase();
+    return SPECIES.find(sp => sp.id.toLowerCase() === n || sp.common.toLowerCase() === n || sp.thai === name.trim());
+  }
+
+  // Parses "species,lon,lat" CSV text (header optional; column order detected
+  // from the header if present, otherwise assumed species,lon,lat).
+  function parseCsvText(text) {
+    const lines = String(text || '').split(/\r\n|\n|\r/).map(l => l.trim()).filter(l => l.length);
+    if (!lines.length) return { rows: [], errorCount: 0 };
+
+    let startIdx = 0;
+    let idx = { species: 0, lon: 1, lat: 2 };
+    const headerCells = lines[0].split(',').map(c => c.trim().toLowerCase());
+    const looksLikeHeader = headerCells.some(c => ['species', 'name', 'lon', 'lng', 'longitude', 'lat', 'latitude'].includes(c));
+    if (looksLikeHeader) {
+      startIdx = 1;
+      const idxOf = names => headerCells.findIndex(c => names.includes(c));
+      const sIdx = idxOf(['species', 'name']);
+      const loIdx = idxOf(['lon', 'lng', 'longitude']);
+      const laIdx = idxOf(['lat', 'latitude']);
+      if (sIdx >= 0) idx.species = sIdx;
+      if (loIdx >= 0) idx.lon = loIdx;
+      if (laIdx >= 0) idx.lat = laIdx;
+    }
+
+    const rows = [];
+    let errorCount = 0;
+    for (let i = startIdx; i < lines.length; i++) {
+      const cells = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+      const species = cells[idx.species];
+      const lon = parseFloat(cells[idx.lon]);
+      const lat = parseFloat(cells[idx.lat]);
+      if (!species || !isFinite(lon) || !isFinite(lat) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+        errorCount++;
+        continue;
+      }
+      rows.push({ species, lon, lat });
+    }
+    return { rows, errorCount };
+  }
+
+  function buildUploadedSpecies(rows) {
+    const groups = new Map();
+    rows.forEach(r => {
+      const known = matchKnownSpecies(r.species);
+      const key = known ? known.id : 'custom_' + r.species.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      if (!groups.has(key)) {
+        groups.set(key, {
+          id: key,
+          common: known ? known.common : r.species.trim(),
+          thai: known ? known.thai : r.species.trim(),
+          color: known ? known.color : UPLOAD_PALETTE[groups.size % UPLOAD_PALETTE.length],
+          points: []
+        });
+      }
+      groups.get(key).points.push([r.lat, r.lon]);
+    });
+    return Array.from(groups.values()).map(g => ({ ...g, total: g.points.length }));
+  }
 
   function esc(s) {
     return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -44,6 +110,9 @@
   function selectStudyArea(id) { state.studyArea = id; render(); }
   function validateData() { state.dataValidated = true; render(); }
   function useSampleData() {
+    state.dataSource = 'sample';
+    state.uploadedRows = [];
+    state.uploadedSpecies = null;
     state.speciesSel = { great: true, wreathed: true, rufous: true, rhino: true, helmeted: true };
     state.dataValidated = true;
     render();
@@ -78,11 +147,29 @@
     const entries = files.map(f => ({ name: f.name, sizeKB: Math.max(1, Math.round(f.size / 1024)), status: 'processing' }));
     state.uploads = [...state.uploads, ...entries];
     render();
-    entries.forEach((entry, idx) => {
-      setTimeout(() => {
-        state.uploads = state.uploads.map(u => u.name === entry.name ? { ...u, status: 'ready' } : u);
+
+    files.forEach((file, i) => {
+      const entryName = entries[i].name;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const { rows, errorCount } = parseCsvText(reader.result);
+        if (rows.length) {
+          state.uploadedRows = [...state.uploadedRows, ...rows];
+          state.uploadedSpecies = buildUploadedSpecies(state.uploadedRows);
+          state.speciesSel = Object.fromEntries(state.uploadedSpecies.map(sp => [sp.id, true]));
+          state.dataSource = 'upload';
+          state.dataValidated = false;
+        }
+        state.uploads = state.uploads.map(u => u.name === entryName
+          ? { ...u, status: rows.length ? 'ready' : 'error', pointCount: rows.length, errorCount }
+          : u);
         render();
-      }, 700 + idx * 300);
+      };
+      reader.onerror = () => {
+        state.uploads = state.uploads.map(u => u.name === entryName ? { ...u, status: 'error' } : u);
+        render();
+      };
+      reader.readAsText(file);
     });
     e.target.value = '';
   }
@@ -114,7 +201,7 @@
   const ACTIONS = {
     setLang, setSettingsTab, setMapTab, toggleSpecies, selectStudyArea, validateData,
     useSampleData, useSampleLayers, useSampleBoundary, toggleLayerStatus, removeLayer,
-    addLayer, toggleExport, generateReport, runModel
+    addLayer, toggleExport, generateReport, runModel, toggleMapFullscreen
   };
 
   document.addEventListener('click', (e) => {
@@ -159,16 +246,19 @@
     const t = T[st.lang];
     const isTh = st.lang === 'th';
 
-    const selectedSpecies = SPECIES.filter(sp => st.speciesSel[sp.id]);
+    const usingUpload = st.dataSource === 'upload' && st.uploadedSpecies;
+    const activeSpecies = usingUpload ? st.uploadedSpecies : SPECIES;
+    const selectedSpecies = activeSpecies.filter(sp => st.speciesSel[sp.id]);
     const selectedCount = selectedSpecies.length;
     const studyArea = STUDY_AREAS.find(a => a.id === st.studyArea);
 
     const visiblePoints = [];
-    selectedSpecies.forEach(sp => sp.points.forEach(([x, y]) => {
-      visiblePoints.push({ latlng: schematicToLatLng(x, y, studyArea.bounds), color: sp.color, species: isTh ? sp.thai : sp.common });
+    selectedSpecies.forEach(sp => sp.points.forEach((pt) => {
+      const latlng = usingUpload ? pt : schematicToLatLng(pt[0], pt[1], studyArea.bounds);
+      visiblePoints.push({ latlng, color: sp.color, species: isTh ? sp.thai : sp.common });
     }));
 
-    const speciesCards = SPECIES.map(sp => ({
+    const speciesCards = activeSpecies.map(sp => ({
       ...sp, displayName: isTh ? sp.thai : sp.common, totalFmt: sp.total.toLocaleString(),
       border: st.speciesSel[sp.id] ? sp.color : '#e6e1d2', op: st.speciesSel[sp.id] ? '1' : '0.5'
     }));
@@ -223,7 +313,21 @@
       t, isTh, studyArea,
       langEnActive: st.lang === 'en', langThActive: st.lang === 'th',
       speciesCards, studyAreaOptions, legendSpecies, layerGroups,
-      uploads: st.uploads.map(u => ({ ...u, statusLabel: u.status === 'ready' ? t.occurrence.included : (isTh ? 'กำลังประมวลผล…' : 'Processing…'), color: u.status === 'ready' ? '#4f7942' : '#b5652f' })),
+      uploads: st.uploads.map(u => {
+        let statusLabel;
+        let color;
+        if (u.status === 'ready') {
+          statusLabel = t.occurrence.included + ' (' + (u.pointCount || 0).toLocaleString() + (isTh ? ' จุด' : ' pts') + (u.errorCount ? ', ' + u.errorCount + (isTh ? ' แถวข้าม' : ' skipped') : '') + ')';
+          color = '#4f7942';
+        } else if (u.status === 'error') {
+          statusLabel = isTh ? 'อ่านไฟล์ไม่ได้ / รูปแบบไม่ถูกต้อง' : 'Unreadable / invalid format';
+          color = '#c1573a';
+        } else {
+          statusLabel = isTh ? 'กำลังประมวลผล…' : 'Processing…';
+          color = '#b5652f';
+        }
+        return { ...u, statusLabel, color };
+      }),
       dataValidated: st.dataValidated, validNote,
       settings: st.settings, isFuture: st.settings.scenario === 'future',
       isTabBasic: st.settingsTab === 'basic', isTabAdvanced: st.settingsTab === 'advanced', isTabOutput: st.settingsTab === 'output',
@@ -453,13 +557,26 @@
   let map, boundaryLayer, pointsLayer, lastFittedArea = null;
 
   function initMap() {
-    map = L.map('leafletMap', { scrollWheelZoom: false });
+    map = L.map('leafletMap', { scrollWheelZoom: true });
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
       maxZoom: 18
     }).addTo(map);
     pointsLayer = L.layerGroup().addTo(map);
   }
+
+  let mapFullscreen = false;
+  function toggleMapFullscreen() {
+    mapFullscreen = !mapFullscreen;
+    document.getElementById('mapWrap').classList.toggle('fullscreen', mapFullscreen);
+    document.getElementById('mapFullscreenBtn').textContent = mapFullscreen ? '⤡' : '⤢';
+    document.getElementById('mapFullscreenBtn').title = mapFullscreen ? 'Exit fullscreen' : 'Toggle fullscreen';
+    setTimeout(() => { if (map) map.invalidateSize(); }, 260);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && mapFullscreen) toggleMapFullscreen();
+  });
 
   function riskColor(pct) {
     if (pct < 25) return '#6ea55a';
