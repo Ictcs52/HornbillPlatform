@@ -3,9 +3,9 @@ const T = {
     top: { title: 'Hornbill Habitat Model × GIS', subtitle: 'A prototype tool combining MaxEnt-style modeling steps (samples / environmental layers / settings / output) with an interactive vector map — all on one page. Loads real sample data by default; change settings and click Run, or upload your own files instead.' },
     samples: { title: 'Samples', dropzone: 'Upload CSV (species,lon,lat), or click to upload', useSample: 'Use sample data' },
     envLayers: { title: 'Environmental Layers', geofabrikNote: 'Road / settlement / river distance layers derived from OpenStreetMap via Geofabrik —' },
-    watershed: { title: 'Study Area (Watershed Forest)' },
+    studyAreaPanel: { title: 'Study Area', recordsLabel: 'occurrence records here' },
     settingsPanel: { title: 'Model Settings', basic: 'Basic', advanced: 'Advanced', output: 'Output', testSplit: '% held out for testing', replicates: 'Number of replicates' },
-    mapPanel: { title: 'Prediction Map', distribution: 'Hornbill Distribution', compare: 'Compare with Watershed', low: 'Low', high: 'High', denseForest: 'Dense / primary forest', secondaryForest: 'Secondary / mixed forest' },
+    mapPanel: { title: 'Prediction Map', distribution: 'Hornbill Distribution', compare: 'Compare Scenario', low: 'Low', high: 'High', denseForest: 'Dense / primary forest', secondaryForest: 'Secondary / mixed forest' },
     results: { title: 'Results', responseCurves: 'Response Curves', variableImportance: 'Variable Importance', noResults: 'No results yet — upload data (or use sample data) then click Run.' },
     modelStatus: { loading: 'Loading…', running: 'Running…', complete: 'Complete', notrun: 'Not run' },
     species: { selected: 'SELECTED', off: 'OFF' },
@@ -17,16 +17,16 @@ const T = {
     risk: { highArea: 'High-risk area:', ofArea: 'of study area under this scenario' },
     exportScreen: { generate: 'Generate Report', formats: { pdf: { label: 'PDF Report' }, png: { label: 'PNG Map Images' }, geotiff: { label: 'GeoTIFF' }, csv: { label: 'CSV' } } },
     scenarioWord: { current: 'current', future: 'future' },
-    map: { basemap: 'Basemap', realNote: 'Live OpenStreetMap basemap, the actual watershed boundary, and real occurrence records from GBIF — no longer a schematic illustration.' },
+    map: { basemap: 'Basemap', realNote: 'Live OpenStreetMap basemap and real occurrence records from GBIF; the study-area outline is a hull computed directly from those records, not an official boundary.' },
     variables: { 'Forest Patch Size': 'Forest Patch Size', 'NDVI (Vegetation Index)': 'NDVI (Vegetation Index)', 'Canopy Density': 'Canopy Density', 'Elevation': 'Elevation', 'Distance to Road': 'Distance to Road', 'Mean Annual Rainfall': 'Mean Annual Rainfall', 'Distance to River': 'Distance to River', 'Slope': 'Slope', 'Mean Temperature': 'Mean Temperature', 'Distance to Settlement': 'Distance to Settlement' }
   },
   th: {
     top: { title: 'แบบจำลองถิ่นอาศัยนกเงือก × GIS', subtitle: 'ต้นแบบเครื่องมือที่รวมขั้นตอนแบบ MaxEnt (samples / environmental layers / settings / output) เข้ากับแผนที่ GIS แบบโต้ตอบในหน้าเดียว — มีข้อมูลตัวอย่างจริงให้พร้อมใช้ ลองเปลี่ยนการตั้งค่าแล้วกด Run ใหม่ หรืออัปโหลดไฟล์จริงแทนได้เลย' },
     samples: { title: 'ข้อมูลจุดพบ (Samples)', dropzone: 'อัปโหลดไฟล์ CSV (species,lon,lat) หรือคลิกเพื่ออัปโหลด', useSample: 'ใช้ข้อมูลตัวอย่าง' },
     envLayers: { title: 'ชั้นข้อมูลสิ่งแวดล้อม', geofabrikNote: 'ชั้นข้อมูลระยะห่างจากถนน/ชุมชน/แม่น้ำ อ้างอิงจาก OpenStreetMap ผ่าน Geofabrik —' },
-    watershed: { title: 'พื้นที่ศึกษา (ป่าต้นน้ำ)' },
+    studyAreaPanel: { title: 'พื้นที่ศึกษา', recordsLabel: 'ระเบียนที่พบในพื้นที่นี้' },
     settingsPanel: { title: 'ตั้งค่า (Settings)', basic: 'Basic', advanced: 'Advanced', output: 'Output', testSplit: '% ข้อมูลกันไว้ทดสอบ', replicates: 'จำนวนรอบ (replicates)' },
-    mapPanel: { title: 'แผนที่ผลการทำนาย', distribution: 'การกระจายพันธุ์นกเงือก', compare: 'เทียบกับป่าต้นน้ำ', low: 'ต่ำ', high: 'สูง', denseForest: 'ป่าดิบชื้น (หนาแน่น)', secondaryForest: 'ป่าเบญจพรรณ/รอง' },
+    mapPanel: { title: 'แผนที่ผลการทำนาย', distribution: 'การกระจายพันธุ์นกเงือก', compare: 'เทียบสถานการณ์', low: 'ต่ำ', high: 'สูง', denseForest: 'ป่าดิบชื้น (หนาแน่น)', secondaryForest: 'ป่าเบญจพรรณ/รอง' },
     results: { title: 'ผลลัพธ์', responseCurves: 'กราฟความสัมพันธ์ตัวแปร (Response Curves)', variableImportance: 'อิทธิพลของตัวแปร (Variable Importance)', noResults: 'ยังไม่มีผลลัพธ์ — อัปโหลดข้อมูล (หรือใช้ข้อมูลตัวอย่าง) แล้วกด Run' },
     modelStatus: { loading: 'กำลังโหลด…', running: 'กำลังประมวลผล…', complete: 'เสร็จสมบูรณ์', notrun: 'ยังไม่รัน' },
     species: { selected: 'เลือกแล้ว', off: 'ปิด' },
@@ -38,7 +38,7 @@ const T = {
     risk: { highArea: 'พื้นที่เสี่ยงสูง:', ofArea: 'ของพื้นที่ศึกษาในสถานการณ์นี้' },
     exportScreen: { generate: 'สร้างรายงาน', formats: { pdf: { label: 'รายงาน PDF' }, png: { label: 'รูปภาพแผนที่ PNG' }, geotiff: { label: 'GeoTIFF' }, csv: { label: 'CSV' } } },
     scenarioWord: { current: 'ปัจจุบัน', future: 'อนาคต' },
-    map: { basemap: 'แผนที่ฐาน', realNote: 'แผนที่ฐาน OpenStreetMap จริง ขอบเขตป่าต้นน้ำจริง และข้อมูลจุดพบนกจริงจาก GBIF — ไม่ใช่ภาพประกอบแบบเดิมอีกต่อไป' },
+    map: { basemap: 'แผนที่ฐาน', realNote: 'แผนที่ฐาน OpenStreetMap จริง และข้อมูลจุดพบนกจริงจาก GBIF ส่วนเส้นขอบเขตพื้นที่ศึกษาคำนวณโดยตรงจากจุดข้อมูลเหล่านี้ ไม่ใช่ขอบเขตทางการ' },
     variables: { 'Forest Patch Size': 'ขนาดผืนป่าต่อเนื่อง', 'NDVI (Vegetation Index)': 'ดัชนีพืชพรรณ (NDVI)', 'Canopy Density': 'ความหนาแน่นเรือนยอด', 'Elevation': 'ระดับความสูง', 'Distance to Road': 'ระยะห่างจากถนน', 'Mean Annual Rainfall': 'ปริมาณน้ำฝนเฉลี่ยรายปี', 'Distance to River': 'ระยะห่างจากแม่น้ำ', 'Slope': 'ความลาดชัน', 'Mean Temperature': 'อุณหภูมิเฉลี่ย', 'Distance to Settlement': 'ระยะห่างจากชุมชน' }
   }
 };

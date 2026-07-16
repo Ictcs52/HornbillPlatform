@@ -28,6 +28,26 @@
 
   const UPLOAD_PALETTE = ['#1f9e4a', '#d9a319', '#e8552a', '#1f9bd9', '#bb32c4', '#4f7942', '#a85a34', '#3d6a8a', '#8a7c3f', '#b5652f'];
 
+  // Ray-casting point-in-polygon test. `ring` is a GeoJSON linear ring: [[lon,lat], ...].
+  function pointInRing(lat, lon, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i][0], yi = ring[i][1];
+      const xj = ring[j][0], yj = ring[j][1];
+      const intersect = ((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  function pointInFeature(lat, lon, feature) {
+    const geom = feature && feature.geometry;
+    if (!geom) return false;
+    if (geom.type === 'Polygon') return pointInRing(lat, lon, geom.coordinates[0]);
+    if (geom.type === 'MultiPolygon') return geom.coordinates.some(poly => pointInRing(lat, lon, poly[0]));
+    return false;
+  }
+
   function matchKnownSpecies(name) {
     const n = name.trim().toLowerCase();
     return SPECIES.find(sp => sp.id.toLowerCase() === n || sp.common.toLowerCase() === n
@@ -268,10 +288,21 @@
       border: st.speciesSel[sp.id] ? sp.color : '#e6e1d2', op: st.speciesSel[sp.id] ? '1' : '0.5'
     }));
 
-    const studyAreaOptions = STUDY_AREAS.map(a => ({
-      ...a, areaFmt: a.areaKm2.toLocaleString(), displayName: isTh ? a.thai : a.name,
-      selected: st.studyArea === a.id
-    }));
+    const studyAreaOptions = STUDY_AREAS.map(a => {
+      const feature = state.boundaries ? state.boundaries.features.find(f => f.properties.id === a.id) : null;
+      let recordCount = null;
+      if (feature) {
+        recordCount = 0;
+        selectedSpecies.forEach(sp => sp.points.forEach(([lat, lon]) => {
+          if (pointInFeature(lat, lon, feature)) recordCount++;
+        }));
+      }
+      return {
+        ...a, displayName: isTh ? a.thai : a.name,
+        selected: st.studyArea === a.id,
+        recordCountLabel: recordCount === null ? '…' : recordCount.toLocaleString() + ' ' + t.studyAreaPanel.recordsLabel
+      };
+    });
 
     const legendSpecies = selectedSpecies.map(sp => ({ displayName: isTh ? sp.thai : sp.common, color: sp.color }));
 
@@ -312,7 +343,7 @@
     const generatedNote = '✓ ' + (isTh ? 'สร้างรายงานแล้ว' : 'Report generated') + ' (' + selectedCount + (isTh ? ' ชนิด, ' : ' species, ') + scenarioWord + ')';
 
     const highRiskPct = Math.min(48, Math.round(12 + st.settings.forestLoss * 0.9));
-    const watershedLabel = isTh ? studyArea.thai : studyArea.name;
+    const areaLabel = isTh ? studyArea.thai : studyArea.name;
 
     return {
       t, isTh, studyArea,
@@ -342,7 +373,7 @@
       lastLogLines: st.log.slice(-3),
       showDistribution: st.mapTab === 'distribution', showCompare: st.mapTab === 'compare',
       mapTab: st.mapTab,
-      visiblePoints, modelRun: st.modelRun, notRun: !st.modelRun, highRiskPct, watershedLabel,
+      visiblePoints, modelRun: st.modelRun, notRun: !st.modelRun, highRiskPct, areaLabel,
       contribBars, responseCurves
     };
   }
@@ -402,11 +433,11 @@
     </div>`;
 
     html += `<div class="card accent-blue">
-      <div class="panel-head"><div class="badge badge-blue">03</div><div class="panel-title">${esc(t.watershed.title)}</div></div>
+      <div class="panel-head"><div class="badge badge-blue">03</div><div class="panel-title">${esc(t.studyAreaPanel.title)}</div></div>
       ${v.studyAreaOptions.map(a => `
         <div class="area-row ${a.selected ? 'selected' : ''}" data-action="selectStudyArea" data-id="${a.id}">
           <div class="area-name">${esc(a.displayName)}</div>
-          <div class="area-meta"><div>${esc(a.watershedClass)}</div><div>${a.areaFmt} km²</div></div>
+          <div class="area-meta">${esc(a.recordCountLabel)}</div>
         </div>`).join('')}
       <div class="btn btn-tan" data-action="useSampleBoundary">${esc(t.samples.useSample)}</div>
     </div>`;
@@ -604,7 +635,7 @@
       boundaryLayer = L.geoJSON(feature, {
         style: { color: '#182620', weight: 2, fillColor, fillOpacity: v.showCompare ? 0.45 : 0.12 }
       }).addTo(map);
-      boundaryLayer.bindPopup(`<strong>${esc(v.watershedLabel)}</strong>`);
+      boundaryLayer.bindPopup(`<strong>${esc(v.areaLabel)}</strong>`);
       if (lastFittedArea !== state.studyArea) {
         map.fitBounds(boundaryLayer.getBounds(), { padding: [12, 12] });
         lastFittedArea = state.studyArea;
@@ -632,9 +663,9 @@
   function boot() {
     initMap();
     render();
-    fetch('./assets/watersheds.json')
+    fetch('./assets/study-areas.json')
       .then(r => {
-        if (!r.ok) throw new Error('Failed to load watershed boundaries');
+        if (!r.ok) throw new Error('Failed to load study area boundaries');
         return r.json();
       })
       .then(geo => { state.boundaries = geo; render(); })
