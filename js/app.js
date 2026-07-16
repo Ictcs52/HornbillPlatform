@@ -106,15 +106,6 @@
     return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
-  // Projects a point from the schematic 640x420 occurrence canvas onto the real
-  // lat/lng bounds of the selected study area, so markers land on genuine geography.
-  function schematicToLatLng(x, y, bounds) {
-    const [[south, west], [north, east]] = bounds;
-    const lng = west + (x / 640) * (east - west);
-    const lat = north - (y / 420) * (north - south);
-    return [lat, lng];
-  }
-
   function updateSetting(key, val) { state.settings[key] = val; render(); }
   function setLang(l) { state.lang = l; render(); }
   function setSettingsTab(tab) { state.settingsTab = tab; render(); }
@@ -265,9 +256,10 @@
     const selectedCount = selectedSpecies.length;
     const studyArea = STUDY_AREAS.find(a => a.id === st.studyArea);
 
+    // Both SPECIES (real GBIF records) and uploaded CSV data store points as
+    // real [lat, lon] pairs, so they're plotted directly with no transform.
     const visiblePoints = [];
-    selectedSpecies.forEach(sp => sp.points.forEach((pt) => {
-      const latlng = usingUpload ? pt : schematicToLatLng(pt[0], pt[1], studyArea.bounds);
+    selectedSpecies.forEach(sp => sp.points.forEach((latlng) => {
       visiblePoints.push({ latlng, color: sp.color, species: isTh ? sp.thai : sp.common });
     }));
 
@@ -570,7 +562,7 @@
   let map, boundaryLayer, pointsLayer, lastFittedArea = null;
 
   function initMap() {
-    map = L.map('leafletMap', { scrollWheelZoom: true });
+    map = L.map('leafletMap', { scrollWheelZoom: true, preferCanvas: true });
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
       maxZoom: 18

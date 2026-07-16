@@ -17,7 +17,7 @@ const T = {
     risk: { highArea: 'High-risk area:', ofArea: 'of study area under this scenario' },
     exportScreen: { generate: 'Generate Report', formats: { pdf: { label: 'PDF Report' }, png: { label: 'PNG Map Images' }, geotiff: { label: 'GeoTIFF' }, csv: { label: 'CSV' } } },
     scenarioWord: { current: 'current', future: 'future' },
-    map: { basemap: 'Basemap', realNote: 'Live OpenStreetMap basemap with the actual watershed boundary — no longer a schematic illustration.' },
+    map: { basemap: 'Basemap', realNote: 'Live OpenStreetMap basemap, the actual watershed boundary, and real occurrence records from GBIF — no longer a schematic illustration.' },
     variables: { 'Forest Patch Size': 'Forest Patch Size', 'NDVI (Vegetation Index)': 'NDVI (Vegetation Index)', 'Canopy Density': 'Canopy Density', 'Elevation': 'Elevation', 'Distance to Road': 'Distance to Road', 'Mean Annual Rainfall': 'Mean Annual Rainfall', 'Distance to River': 'Distance to River', 'Slope': 'Slope', 'Mean Temperature': 'Mean Temperature', 'Distance to Settlement': 'Distance to Settlement' }
   },
   th: {
@@ -38,7 +38,7 @@ const T = {
     risk: { highArea: 'พื้นที่เสี่ยงสูง:', ofArea: 'ของพื้นที่ศึกษาในสถานการณ์นี้' },
     exportScreen: { generate: 'สร้างรายงาน', formats: { pdf: { label: 'รายงาน PDF' }, png: { label: 'รูปภาพแผนที่ PNG' }, geotiff: { label: 'GeoTIFF' }, csv: { label: 'CSV' } } },
     scenarioWord: { current: 'ปัจจุบัน', future: 'อนาคต' },
-    map: { basemap: 'แผนที่ฐาน', realNote: 'แผนที่ฐาน OpenStreetMap จริง พร้อมขอบเขตป่าต้นน้ำจริง — ไม่ใช่ภาพประกอบแบบเดิมอีกต่อไป' },
+    map: { basemap: 'แผนที่ฐาน', realNote: 'แผนที่ฐาน OpenStreetMap จริง ขอบเขตป่าต้นน้ำจริง และข้อมูลจุดพบนกจริงจาก GBIF — ไม่ใช่ภาพประกอบแบบเดิมอีกต่อไป' },
     variables: { 'Forest Patch Size': 'ขนาดผืนป่าต่อเนื่อง', 'NDVI (Vegetation Index)': 'ดัชนีพืชพรรณ (NDVI)', 'Canopy Density': 'ความหนาแน่นเรือนยอด', 'Elevation': 'ระดับความสูง', 'Distance to Road': 'ระยะห่างจากถนน', 'Mean Annual Rainfall': 'ปริมาณน้ำฝนเฉลี่ยรายปี', 'Distance to River': 'ระยะห่างจากแม่น้ำ', 'Slope': 'ความลาดชัน', 'Mean Temperature': 'อุณหภูมิเฉลี่ย', 'Distance to Settlement': 'ระยะห่างจากชุมชน' }
   }
 };
