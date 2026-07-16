@@ -30,25 +30,37 @@
 
   function matchKnownSpecies(name) {
     const n = name.trim().toLowerCase();
-    return SPECIES.find(sp => sp.id.toLowerCase() === n || sp.common.toLowerCase() === n || sp.thai === name.trim());
+    return SPECIES.find(sp => sp.id.toLowerCase() === n || sp.common.toLowerCase() === n
+      || (sp.latin && sp.latin.toLowerCase() === n) || sp.thai === name.trim());
   }
 
-  // Parses "species,lon,lat" CSV text (header optional; column order detected
-  // from the header if present, otherwise assumed species,lon,lat).
+  const SPECIES_COLS = ['species', 'name', 'scientificname', 'verbatimscientificname'];
+  const LON_COLS = ['lon', 'lng', 'longitude', 'decimallongitude'];
+  const LAT_COLS = ['lat', 'latitude', 'decimallatitude'];
+
+  // Parses occurrence text into {species, lon, lat} rows. Supports plain
+  // "species,lon,lat" CSV as well as GBIF occurrence downloads, whose "CSV"
+  // export is actually tab-delimited Darwin Core (columns like species,
+  // decimalLatitude, decimalLongitude among many others).
   function parseCsvText(text) {
-    const lines = String(text || '').split(/\r\n|\n|\r/).map(l => l.trim()).filter(l => l.length);
+    const lines = String(text || '').split(/\r\n|\n|\r/).map(l => l.replace(/\r$/, '')).filter(l => l.trim().length);
     if (!lines.length) return { rows: [], errorCount: 0 };
+
+    const commaCount = (lines[0].match(/,/g) || []).length;
+    const tabCount = (lines[0].match(/\t/g) || []).length;
+    const delim = tabCount > commaCount ? '\t' : ',';
+    const split = line => line.split(delim).map(c => c.trim().replace(/^"|"$/g, ''));
 
     let startIdx = 0;
     let idx = { species: 0, lon: 1, lat: 2 };
-    const headerCells = lines[0].split(',').map(c => c.trim().toLowerCase());
-    const looksLikeHeader = headerCells.some(c => ['species', 'name', 'lon', 'lng', 'longitude', 'lat', 'latitude'].includes(c));
+    const headerCells = split(lines[0]).map(c => c.toLowerCase());
+    const looksLikeHeader = headerCells.some(c => SPECIES_COLS.includes(c) || LON_COLS.includes(c) || LAT_COLS.includes(c));
     if (looksLikeHeader) {
       startIdx = 1;
       const idxOf = names => headerCells.findIndex(c => names.includes(c));
-      const sIdx = idxOf(['species', 'name']);
-      const loIdx = idxOf(['lon', 'lng', 'longitude']);
-      const laIdx = idxOf(['lat', 'latitude']);
+      const sIdx = idxOf(SPECIES_COLS);
+      const loIdx = idxOf(LON_COLS);
+      const laIdx = idxOf(LAT_COLS);
       if (sIdx >= 0) idx.species = sIdx;
       if (loIdx >= 0) idx.lon = loIdx;
       if (laIdx >= 0) idx.lat = laIdx;
@@ -57,7 +69,8 @@
     const rows = [];
     let errorCount = 0;
     for (let i = startIdx; i < lines.length; i++) {
-      const cells = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+      if (!lines[i].trim()) continue;
+      const cells = split(lines[i]);
       const species = cells[idx.species];
       const lon = parseFloat(cells[idx.lon]);
       const lat = parseFloat(cells[idx.lat]);
