@@ -15,7 +15,7 @@ const T = {
     simulation: { running: 'Running…', runAgain: 'Run Again', run: 'Run', notePipeline: 'Processing pipeline in progress', noteComplete: 'Model run complete', noteReady: 'Ready to run', noteBlocked: 'Validate occurrence data and load environmental layers first' },
     suitability: { mean: 'Mean HSI (occurrence pts):' },
     risk: { highArea: 'High-risk occurrence points:', ofArea: 'show declining suitability under this scenario' },
-    map: { basemap: 'Basemap', realNote: 'Live OpenStreetMap basemap and real occurrence records from GBIF.', rasterNote: 'Real TMD Climate Atlas data (1991–2020), interpolated from weather stations — see rnd.tmd.go.th/climateatlas.', forestNote: 'Real forest cover data — Hansen Global Forest Change v1.11 (2023): year-2000 tree canopy cover minus mapped loss through 2023.' },
+    map: { basemap: 'Basemap', realNote: 'Live OpenStreetMap basemap and real occurrence records from GBIF.', rasterNote: 'Real TMD Climate Atlas data (1991–2020), interpolated from weather stations — see rnd.tmd.go.th/climateatlas.', forestNote: 'Real forest cover data — Hansen Global Forest Change v1.13 (2025): year-2000 tree canopy cover minus mapped loss through 2025.' },
     variables: { 'Forest Patch Size': 'Forest Patch Size', 'NDVI (Vegetation Index)': 'NDVI (Vegetation Index)', 'Canopy Density': 'Canopy Density', 'Elevation': 'Elevation', 'Distance to Road': 'Distance to Road', 'Mean Annual Rainfall': 'Mean Annual Rainfall', 'Distance to River': 'Distance to River', 'Slope': 'Slope', 'Mean Temperature': 'Mean Temperature', 'Distance to Settlement': 'Distance to Settlement', 'Mean PM2.5 (Dust)': 'Mean PM2.5 (Dust)' },
     climate: {
       title: 'Future Climate Scenario', optimalTitle: 'Optimal conditions (current)',
@@ -41,7 +41,7 @@ const T = {
     simulation: { running: 'กำลังรัน…', runAgain: 'รันอีกครั้ง', run: 'Run', notePipeline: 'กำลังประมวลผลตามขั้นตอน', noteComplete: 'รันแบบจำลองเสร็จแล้ว', noteReady: 'พร้อมรัน', noteBlocked: 'กรุณาตรวจสอบข้อมูลจุดพบและโหลดชั้นข้อมูลสิ่งแวดล้อมก่อน' },
     suitability: { mean: 'ค่าเฉลี่ย HSI (จุดพบ):' },
     risk: { highArea: 'จุดพบที่มีความเสี่ยงสูง:', ofArea: 'มีความเหมาะสมลดลงในสถานการณ์นี้' },
-    map: { basemap: 'แผนที่ฐาน', realNote: 'แผนที่ฐาน OpenStreetMap จริง และข้อมูลจุดพบนกจริงจาก GBIF', rasterNote: 'ข้อมูลจริงจาก TMD Climate Atlas (พ.ศ. 2534-2563) แทรกค่าจากสถานีตรวจอากาศ — ดูที่ rnd.tmd.go.th/climateatlas', forestNote: 'ข้อมูลพื้นที่ป่าไม้จริง จาก Hansen Global Forest Change v1.11 (2023): พื้นที่ป่าปี 2000 หักลบพื้นที่ที่สูญเสียไปจนถึงปี 2023' },
+    map: { basemap: 'แผนที่ฐาน', realNote: 'แผนที่ฐาน OpenStreetMap จริง และข้อมูลจุดพบนกจริงจาก GBIF', rasterNote: 'ข้อมูลจริงจาก TMD Climate Atlas (พ.ศ. 2534-2563) แทรกค่าจากสถานีตรวจอากาศ — ดูที่ rnd.tmd.go.th/climateatlas', forestNote: 'ข้อมูลพื้นที่ป่าไม้จริง จาก Hansen Global Forest Change v1.13 (2025): พื้นที่ป่าปี 2000 หักลบพื้นที่ที่สูญเสียไปจนถึงปี 2025' },
     variables: { 'Forest Patch Size': 'ขนาดผืนป่าต่อเนื่อง', 'NDVI (Vegetation Index)': 'ดัชนีพืชพรรณ (NDVI)', 'Canopy Density': 'ความหนาแน่นเรือนยอด', 'Elevation': 'ระดับความสูง', 'Distance to Road': 'ระยะห่างจากถนน', 'Mean Annual Rainfall': 'ปริมาณน้ำฝนเฉลี่ยรายปี', 'Distance to River': 'ระยะห่างจากแม่น้ำ', 'Slope': 'ความลาดชัน', 'Mean Temperature': 'อุณหภูมิเฉลี่ย', 'Distance to Settlement': 'ระยะห่างจากชุมชน', 'Mean PM2.5 (Dust)': 'ฝุ่น PM2.5 เฉลี่ย' },
     climate: {
       title: 'จำลองสถานการณ์อนาคต', optimalTitle: 'ค่าที่เหมาะสมที่สุด (ปัจจุบัน)',

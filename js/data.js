@@ -27,7 +27,7 @@ const ENV_LAYERS = [
   { id: 'rainfall', name: 'Mean Annual Rainfall', group: 'Climate', resolution: '2.5km', source: 'TMD Climate Atlas 1991–2020, IDW from 86 stations', sourceUrl: 'http://www.rnd.tmd.go.th/climateatlas/', status: 'not_loaded', keywords: ['rainfall', 'rain', 'precip'] },
   { id: 'temperature', name: 'Mean Temperature', group: 'Climate', resolution: '2.5km', source: 'TMD Climate Atlas 1991–2020, IDW from 87 stations', sourceUrl: 'http://www.rnd.tmd.go.th/climateatlas/', status: 'not_loaded', keywords: ['temperature', 'temp'] },
   { id: 'dust', name: 'Mean PM2.5 (Dust)', group: 'Climate', resolution: '1km', source: 'User-provided (e.g. PCD, CAMS)', status: 'not_loaded', keywords: ['dust', 'pm25', 'pm2.5', 'pm', 'aqi', 'airquality', 'air_quality'] },
-  { id: 'forest', name: 'Forest Cover', group: 'Land Cover', resolution: '2.5km', source: 'Hansen Global Forest Change v1.11 (2023): 2000 tree cover minus loss through 2023', sourceUrl: 'https://glad.earthengine.app/view/global-forest-change', status: 'not_loaded', keywords: ['forest', 'treecover', 'canopy', 'landcover'] }
+  { id: 'forest', name: 'Forest Cover', group: 'Land Cover', resolution: '2.5km', source: 'Hansen Global Forest Change v1.13 (2025): 2000 tree cover minus loss through 2025', sourceUrl: 'https://glad.earthengine.app/view/global-forest-change', status: 'not_loaded', keywords: ['forest', 'treecover', 'canopy', 'landcover'] }
 ];
 
 const VARIABLE_CONTRIBUTION = [

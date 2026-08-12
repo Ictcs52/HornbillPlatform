@@ -1032,7 +1032,7 @@
   const DEFAULT_RASTERS = [
     { layerId: 'rainfall', url: './assets/rasters/rainfall_annual_tmd_1991-2020.tif', name: 'rainfall_annual_tmd_1991-2020.tif' },
     { layerId: 'temperature', url: './assets/rasters/mean_temp_annual_tmd_1991-2020.tif', name: 'mean_temp_annual_tmd_1991-2020.tif' },
-    { layerId: 'forest', url: './assets/rasters/forest_cover_2023_hansen.tif', name: 'forest_cover_2023_hansen.tif' }
+    { layerId: 'forest', url: './assets/rasters/forest_cover_2025_hansen.tif', name: 'forest_cover_2025_hansen.tif' }
   ];
 
   function loadDefaultRasters() {
