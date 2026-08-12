@@ -102,6 +102,83 @@ function countPointsOutsideRaster(raster, points) {
   return count;
 }
 
+// Shared grid used when interpolating uploaded station point data into a
+// raster, matching the extent/resolution of the bundled TMD rasters so a
+// user-supplied layer lines up with them.
+const STATION_GRID = { bbox: [97, 5.5, 105.5, 21.0], width: 340, height: 620 };
+
+// Parses a TMD Climate Atlas / qgis2web station export: a JS file of the
+// form `var json_<name> = { ...GeoJSON FeatureCollection... };` (bare
+// GeoJSON also works). Each feature needs Latitude/Longitude properties
+// plus exactly one more property holding the measured value — its key
+// varies by variable ("Rainfall (mm.)", "Temperature (Celsius)", a PM2.5
+// column, etc.) so it's auto-detected as whichever property isn't
+// Station/Station ID/Latitude/Longitude.
+function parseStationText(text) {
+  const match = String(text).match(/=\s*(\{[\s\S]*\})\s*;?\s*$/);
+  const jsonText = match ? match[1] : text;
+  let geo;
+  try {
+    geo = JSON.parse(jsonText);
+  } catch (err) {
+    return { stations: [], errorCount: 0, valueLabel: null, parseError: err.message };
+  }
+  const skipKeys = new Set(['Station', 'Station ID', 'Latitude', 'Longitude']);
+  const stations = [];
+  let errorCount = 0;
+  let valueLabel = null;
+  (geo.features || []).forEach(f => {
+    const props = (f && f.properties) || {};
+    const lat = parseFloat(props.Latitude);
+    const lon = parseFloat(props.Longitude);
+    const valueKey = Object.keys(props).find(k => !skipKeys.has(k));
+    const value = valueKey ? parseFloat(props[valueKey]) : NaN;
+    if (!isFinite(lat) || !isFinite(lon) || !isFinite(value)) { errorCount++; return; }
+    if (!valueLabel) valueLabel = valueKey;
+    stations.push({ lat, lon, value, name: props.Station || '' });
+  });
+  return { stations, errorCount, valueLabel, parseError: null };
+}
+
+// Inverse-distance-weighted interpolation (power 2) from station points to
+// the shared STATION_GRID — the same method used offline to build the
+// bundled TMD rasters, run client-side so uploaded station data works the
+// same way. Returns an object shaped like the parsed-GeoTIFF rasters so it
+// can drop straight into the existing rendering/sampling pipeline.
+function idwToRaster(stations, fileName) {
+  const { bbox, width, height } = STATION_GRID;
+  const [west, south, east, north] = bbox;
+  const band = new Float32Array(width * height);
+  let min = Infinity, max = -Infinity;
+  for (let row = 0; row < height; row++) {
+    const lat = north - (row + 0.5) / height * (north - south);
+    for (let col = 0; col < width; col++) {
+      const lon = west + (col + 0.5) / width * (east - west);
+      let weightSum = 0, valueSum = 0, exact = null;
+      for (let i = 0; i < stations.length; i++) {
+        const s = stations[i];
+        const dLat = lat - s.lat, dLon = lon - s.lon;
+        const distSq = dLat * dLat + dLon * dLon;
+        if (distSq < 1e-10) { exact = s.value; break; }
+        const w = 1 / distSq;
+        weightSum += w;
+        valueSum += w * s.value;
+      }
+      const v = exact !== null ? exact : valueSum / weightSum;
+      band[row * width + col] = v;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+  }
+  return {
+    fileName, sizeMB: 0,
+    width, height, bbox,
+    resX: (east - west) / width, resY: (north - south) / height,
+    epsg: 4326, nodata: null,
+    min, max, band
+  };
+}
+
 // Color ramps for rendering raster layers as a heatmap image, styled after
 // the TMD Climate Atlas legends (cool-to-hot for temperature, pale-to-purple
 // for rainfall). Each stop is {t: 0-1, r, g, b}.

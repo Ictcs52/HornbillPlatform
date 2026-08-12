@@ -239,6 +239,61 @@
     state.unmatchedRasterFiles = state.unmatchedRasterFiles.filter(u => u.tempId !== tempId);
     render();
   }
+
+  // --- Station-point data upload (TMD-style .js/.txt export), interpolated
+  // client-side into a raster via IDW — an alternative to uploading a
+  // ready-made .tif, for layers that only have raw station data available.
+  function uploadStationData(layerId, file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const parsed = parseStationText(reader.result);
+      state.layers = state.layers.map(l => l.id === layerId
+        ? { ...l, stationPending: { ...parsed, fileName: file.name } }
+        : l);
+      render();
+    };
+    reader.onerror = () => {
+      state.layers = state.layers.map(l => l.id === layerId
+        ? { ...l, stationPending: { stations: [], errorCount: 0, valueLabel: null, parseError: 'Failed to read file', fileName: file.name } }
+        : l);
+      render();
+    };
+    reader.readAsText(file);
+  }
+
+  function validateStationData(layerId) {
+    const layer = state.layers.find(l => l.id === layerId);
+    const pending = layer && layer.stationPending;
+    if (!pending || !pending.stations.length) return;
+    const raster = idwToRaster(pending.stations, pending.fileName);
+    attachRasterImage(raster, layerId);
+    state.layers = state.layers.map(l => l.id === layerId
+      ? {
+          ...l, status: 'ready', raster, fileName: pending.fileName, sizeMB: null, error: null,
+          stationPending: null, stationMeta: { count: pending.stations.length, errorCount: pending.errorCount, valueLabel: pending.valueLabel }
+        }
+      : l);
+    render();
+  }
+
+  function useSampleRaster(layerId) {
+    const def = DEFAULT_RASTERS.find(d => d.layerId === layerId);
+    if (!def) return;
+    state.layers = state.layers.map(l => l.id === layerId ? { ...l, status: 'processing', stationPending: null } : l);
+    render();
+    fetchGeoTiff(def.url, def.name).then(raster => {
+      attachRasterImage(raster, layerId);
+      state.layers = state.layers.map(l => l.id === layerId
+        ? { ...l, status: 'ready', raster, fileName: def.name, sizeMB: raster.sizeMB, stationMeta: null }
+        : l);
+      render();
+    }).catch(err => {
+      state.layers = state.layers.map(l => l.id === layerId ? { ...l, status: 'not_loaded' } : l);
+      console.error(err);
+      render();
+    });
+  }
+
   function addLayer() {
     const id = 'custom' + Date.now();
     state.layers = [...state.layers, { id, name: 'New Variable', group: 'Climate', resolution: '1km', source: 'Custom', status: 'not_loaded' }];
@@ -272,6 +327,7 @@
   const ACTIONS = {
     setLang, setMapTab, toggleSpecies, validateData, useSampleData,
     removeLayer, removeRasterFromLayer,
+    validateStationData, useSampleRaster,
     addLayer, runModel, toggleMapFullscreen,
     dismissUnmatchedFile, toggleLeftPanel, toggleRightPanel
   };
@@ -305,6 +361,10 @@
       onFileUpload(e);
     } else if (onchange === 'rasterUpload') {
       handleRasterFiles(el.files);
+      el.value = '';
+    } else if (onchange === 'stationUpload') {
+      const file = el.files && el.files[0];
+      if (file) uploadStationData(el.getAttribute('data-id'), file);
       el.value = '';
     } else if (onchange === 'assignUnmatchedRaster') {
       assignUnmatchedToLayer(el.getAttribute('data-temp-id'), el.value);
@@ -421,6 +481,24 @@
         const style = STATUS_STYLE[l.status] || STATUS_STYLE.not_loaded;
         let outsideCount = null;
         if (l.raster) outsideCount = countPointsOutsideRaster(l.raster, allOccurrencePoints);
+        let stationPendingNote = null, stationPendingError = false;
+        if (l.stationPending) {
+          if (l.stationPending.parseError) {
+            stationPendingNote = (isTh ? 'อ่านไฟล์ไม่สำเร็จ: ' : 'Failed to parse: ') + l.stationPending.parseError;
+            stationPendingError = true;
+          } else if (!l.stationPending.stations.length) {
+            stationPendingNote = isTh ? 'ไม่พบจุดสถานีที่อ่านได้ในไฟล์นี้' : 'No readable station points found in this file';
+            stationPendingError = true;
+          } else {
+            stationPendingNote = l.stationPending.stations.length.toLocaleString() + (isTh ? ' สถานี' : ' stations')
+              + (l.stationPending.errorCount ? ', ' + l.stationPending.errorCount + (isTh ? ' แถวข้าม' : ' skipped') : '')
+              + (l.stationPending.valueLabel ? ' — ' + l.stationPending.valueLabel : '');
+          }
+        }
+        const stationMetaNote = l.stationMeta
+          ? '✓ ' + (isTh ? 'สร้างจาก ' : 'Built from ') + l.stationMeta.count.toLocaleString() + (isTh ? ' สถานี' : ' stations')
+            + (l.stationMeta.errorCount ? ', ' + l.stationMeta.errorCount + (isTh ? ' แถวข้าม' : ' skipped') : '')
+          : null;
         return {
           ...l, resNum, resUnit,
           statusLabel: style.label, statusColor: style.color,
@@ -430,7 +508,9 @@
           bboxLabel: l.raster ? l.raster.bbox.map(v => v.toFixed(2)).join(', ') : null,
           rangeLabel: l.raster && l.raster.min !== null ? l.raster.min.toFixed(2) + ' – ' + l.raster.max.toFixed(2) : null,
           nodataLabel: l.raster && l.raster.nodata !== null ? String(l.raster.nodata) : null,
-          outsideCount
+          outsideCount,
+          hasDefaultSample: DEFAULT_RASTERS.some(d => d.layerId === l.id),
+          stationPendingNote, stationPendingError, stationMetaNote
         };
       })
     })).filter(g => g.items.length);
@@ -614,6 +694,7 @@
                 <div class="raster-info-row">${esc(t.layers.valueRange)}: ${esc(l.rangeLabel)}  |  NoData: ${esc(l.nodataLabel)}</div>
                 <div class="raster-info-row">${esc(t.layers.extent)}: ${esc(l.bboxLabel)}</div>
                 ${l.source ? `<div class="raster-info-row">${esc(t.layers.source)}: ${l.sourceUrl ? `<a href="${esc(l.sourceUrl)}" target="_blank" rel="noopener">${esc(l.source)}</a>` : esc(l.source)}</div>` : ''}
+                ${l.stationMetaNote ? `<div class="raster-info-row">${esc(l.stationMetaNote)}</div>` : ''}
                 ${l.outsideCount > 0 ? `<div class="raster-warning">⚠ ${l.outsideCount.toLocaleString()} ${esc(t.layers.pointsOutside)}</div>` : ''}
                 <div class="raster-change" data-action="removeRasterFromLayer" data-id="${l.id}">${esc(t.layers.changeFile)}</div>
               </div>` : l.status === 'error' ? `<div class="raster-warning">⚠ ${esc(l.error || '')}</div>` : `
@@ -621,6 +702,17 @@
                 <input class="res-num" type="number" value="${esc(l.resNum)}" data-onchange="layerResolution" data-id="${l.id}">
                 <input class="res-unit" value="${esc(l.resUnit)}" data-onchange="layerResolution" data-id="${l.id}">
                 <input class="res-source" value="${esc(l.source)}" data-onchange="layerField" data-id="${l.id}" data-field="source">
+              </div>
+              <div class="station-upload">
+                <label class="dropzone station-dropzone" for="stationUpload_${l.id}">
+                  <div class="dropzone-label">${esc(t.layers.stationDropzone)}</div>
+                </label>
+                <input id="stationUpload_${l.id}" type="file" accept=".txt,.js,.json" style="display:none" data-onchange="stationUpload" data-id="${l.id}">
+                ${l.stationPendingNote ? `<div class="unmatched-status" style="color:${l.stationPendingError ? '#c1573a' : '#8a6a4f'}">${esc(l.stationPendingNote)}</div>` : ''}
+                <div class="btn-row">
+                  ${l.hasDefaultSample ? `<div class="btn btn-tan" data-action="useSampleRaster" data-id="${l.id}">${esc(t.samples.useSample)}</div>` : ''}
+                  <div class="btn btn-green" data-action="validateStationData" data-id="${l.id}">${esc(t.occurrence.validate)}</div>
+                </div>
               </div>`}
           </div>`).join('')}
       `).join('')}
