@@ -37,12 +37,21 @@
   }
 
   // --- Environmental layer raster uploads (GeoTIFF, parsed entirely client-side) ---
+  // Rasterizes the loaded band into a colored PNG (see raster.js) for layers
+  // that have a defined color ramp, so it can be shown as a map overlay.
+  function attachRasterImage(raster, layerId) {
+    const ramp = RASTER_RAMPS[layerId];
+    if (ramp) raster.imgUrl = renderRasterToDataUrl(raster, ramp);
+    return raster;
+  }
+
   function assignRasterToLayer(layerId, file) {
     state.layers = state.layers.map(l => l.id === layerId
       ? { ...l, status: 'processing', raster: null, fileName: file.name, sizeMB: file.size / (1024 * 1024), error: null }
       : l);
     render();
     parseGeoTiffFile(file).then(raster => {
+      attachRasterImage(raster, layerId);
       state.layers = state.layers.map(l => l.id === layerId ? { ...l, status: 'ready', raster } : l);
       render();
     }).catch(err => {
@@ -76,6 +85,7 @@
     if (!layerId) return;
     const entry = state.unmatchedRasterFiles.find(u => u.tempId === tempId);
     if (!entry || !entry.raster) return;
+    attachRasterImage(entry.raster, layerId);
     state.unmatchedRasterFiles = state.unmatchedRasterFiles.filter(u => u.tempId !== tempId);
     state.layers = state.layers.map(l => l.id === layerId
       ? { ...l, status: 'ready', raster: entry.raster, fileName: entry.fileName, sizeMB: entry.sizeMB, error: null }
@@ -312,6 +322,20 @@
       highRiskPct = risks.length ? Math.round(100 * risks.filter(r => r > 0.05).length / risks.length) : 0;
     }
 
+    let rasterTabInfo = null;
+    if (st.mapTab === 'rainfall' || st.mapTab === 'temperature') {
+      const layer = st.layers.find(l => l.id === st.mapTab);
+      const unit = st.mapTab === 'rainfall' ? ' mm' : ' °C';
+      const decimals = st.mapTab === 'rainfall' ? 0 : 1;
+      const loaded = !!(layer && layer.raster && layer.raster.imgUrl);
+      rasterTabInfo = {
+        loaded,
+        minLabel: loaded ? layer.raster.min.toFixed(decimals) + unit : '',
+        maxLabel: loaded ? layer.raster.max.toFixed(decimals) + unit : '',
+        gradientCss: rampCss(RASTER_RAMPS[st.mapTab])
+      };
+    }
+
     return {
       t, isTh,
       langEnActive: st.lang === 'en', langThActive: st.lang === 'th',
@@ -321,7 +345,7 @@
       runBtnColor, runBtnLabel, canRunNote, running: st.running, runProgress: st.runProgress,
       lastLogLines: st.log.slice(-3),
       showDistribution: st.mapTab === 'distribution', showCompare: st.mapTab === 'compare',
-      mapTab: st.mapTab,
+      mapTab: st.mapTab, rasterTabInfo,
       visiblePoints, modelRun: st.modelRun, notRun: !st.modelRun, highRiskPct,
       contribBars, responseCurves, pointRisk
     };
@@ -481,17 +505,24 @@
 
   function renderMapChrome(v) {
     const t = v.t;
+    const rasterTab = v.mapTab === 'rainfall' || v.mapTab === 'temperature';
+
     document.getElementById('mapPanelTitle').textContent = t.mapPanel.title;
     document.getElementById('mapTabDist').textContent = t.mapPanel.distribution;
     document.getElementById('mapTabDist').classList.toggle('active', v.showDistribution);
+    document.getElementById('mapTabRainfall').textContent = t.mapPanel.rainfallMap;
+    document.getElementById('mapTabRainfall').classList.toggle('active', v.mapTab === 'rainfall');
+    document.getElementById('mapTabTemperature').textContent = t.mapPanel.temperatureMap;
+    document.getElementById('mapTabTemperature').classList.toggle('active', v.mapTab === 'temperature');
     document.getElementById('mapTabCompare').textContent = t.mapPanel.compare;
     document.getElementById('mapTabCompare').classList.toggle('active', v.showCompare);
-    document.getElementById('mapRealNote').textContent = t.map.realNote;
+    document.getElementById('mapRealNote').textContent = rasterTab ? t.map.rasterNote : t.map.realNote;
 
     const noResultsBox = document.getElementById('noResultsBox');
-    const showNoResults = v.showCompare && v.notRun;
+    const rasterMissing = rasterTab && !v.rasterTabInfo.loaded;
+    const showNoResults = (v.showCompare && v.notRun) || rasterMissing;
     noResultsBox.style.display = showNoResults ? 'block' : 'none';
-    noResultsBox.textContent = t.results.noResults;
+    noResultsBox.textContent = rasterMissing ? t.mapPanel.rasterNotLoaded : t.results.noResults;
     document.getElementById('leafletMap').style.display = showNoResults ? 'none' : 'block';
 
     const gradientEl = document.getElementById('mapGradient');
@@ -513,6 +544,13 @@
       riskNoteEl.style.display = 'block';
       riskNoteEl.innerHTML = `${esc(v.t.risk.highArea)} <b style="color:#c1573a">${v.highRiskPct}%</b> ${esc(v.t.risk.ofArea)}`;
       speciesLegendEl.innerHTML = '';
+    } else if (rasterTab && v.rasterTabInfo.loaded) {
+      gradientEl.style.display = 'block';
+      gradientEl.style.background = v.rasterTabInfo.gradientCss;
+      scaleLabelsEl.style.display = 'flex';
+      scaleLabelsEl.innerHTML = `<div>${esc(v.rasterTabInfo.minLabel)}</div><div>${esc(v.rasterTabInfo.maxLabel)}</div>`;
+      riskNoteEl.style.display = 'none';
+      speciesLegendEl.innerHTML = '';
     } else {
       gradientEl.style.display = 'none';
       scaleLabelsEl.style.display = 'none';
@@ -523,7 +561,7 @@
 
   // --- Leaflet map: a single persistent map instance, updated in place so it
   // never gets torn down by the innerHTML re-renders above. ---
-  let map, pointsLayer, boundsFitted = false;
+  let map, pointsLayer, rasterOverlay, boundsFitted = false;
 
   function initMap() {
     map = L.map('leafletMap', { scrollWheelZoom: true, preferCanvas: true });
@@ -557,6 +595,17 @@
   function updateLeafletLayers(v) {
     if (!map) return;
     pointsLayer.clearLayers();
+    if (rasterOverlay) { map.removeLayer(rasterOverlay); rasterOverlay = null; }
+
+    const rasterTab = v.mapTab === 'rainfall' || v.mapTab === 'temperature';
+    if (rasterTab) {
+      if (v.rasterTabInfo.loaded) {
+        const layer = state.layers.find(l => l.id === v.mapTab);
+        const [west, south, east, north] = layer.raster.bbox;
+        rasterOverlay = L.imageOverlay(layer.raster.imgUrl, [[south, west], [north, east]], { opacity: 0.85 }).addTo(map);
+      }
+      return;
+    }
 
     if (v.showCompare && v.notRun) return;
 
@@ -609,6 +658,7 @@
       state.layers = state.layers.map(l => l.id === layerId ? { ...l, status: 'processing' } : l);
       render();
       fetchGeoTiff(url, name).then(raster => {
+        attachRasterImage(raster, layerId);
         state.layers = state.layers.map(l => l.id === layerId ? { ...l, status: 'ready', raster, fileName: name, sizeMB: raster.sizeMB } : l);
         render();
       }).catch(err => {

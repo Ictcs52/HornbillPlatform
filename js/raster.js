@@ -101,3 +101,72 @@ function countPointsOutsideRaster(raster, points) {
   });
   return count;
 }
+
+// Color ramps for rendering raster layers as a heatmap image, styled after
+// the TMD Climate Atlas legends (cool-to-hot for temperature, pale-to-purple
+// for rainfall). Each stop is {t: 0-1, r, g, b}.
+const TEMP_RAMP = [
+  { t: 0, r: 0x2c, g: 0x7f, b: 0xb8 },
+  { t: 0.25, r: 0x7f, g: 0xc9, b: 0x7f },
+  { t: 0.5, r: 0xd9, g: 0xd9, b: 0x4f },
+  { t: 0.75, r: 0xe8, g: 0x8a, b: 0x2a },
+  { t: 1, r: 0xb5, g: 0x1f, b: 0x1f }
+];
+
+const RAINFALL_RAMP = [
+  { t: 0, r: 0xf5, g: 0xf0, b: 0xd9 },
+  { t: 0.3, r: 0xb8, g: 0xd9, b: 0x6a },
+  { t: 0.55, r: 0x4f, g: 0xa8, b: 0x8a },
+  { t: 0.75, r: 0x2f, g: 0x6f, b: 0xb8 },
+  { t: 1, r: 0x6b, g: 0x2f, b: 0xb8 }
+];
+
+const RASTER_RAMPS = { rainfall: RAINFALL_RAMP, temperature: TEMP_RAMP };
+
+function rampColor(stops, t) {
+  t = Math.max(0, Math.min(1, t));
+  for (let i = 1; i < stops.length; i++) {
+    if (t <= stops[i].t) {
+      const a = stops[i - 1], b = stops[i];
+      const f = (t - a.t) / ((b.t - a.t) || 1);
+      return [
+        Math.round(a.r + f * (b.r - a.r)),
+        Math.round(a.g + f * (b.g - a.g)),
+        Math.round(a.b + f * (b.b - a.b))
+      ];
+    }
+  }
+  const last = stops[stops.length - 1];
+  return [last.r, last.g, last.b];
+}
+
+function rampCss(stops) {
+  return 'linear-gradient(to right,' + stops.map(s => `rgb(${s.r},${s.g},${s.b}) ${Math.round(s.t * 100)}%`).join(',') + ')';
+}
+
+// Rasterizes a parsed GeoTIFF band into a colored PNG data URL for use as a
+// Leaflet image overlay — entirely client-side, no server round trip.
+function renderRasterToDataUrl(raster, ramp) {
+  const { width, height, band, min, max, nodata } = raster;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  const imgData = ctx.createImageData(width, height);
+  const range = (max - min) || 1;
+  for (let i = 0; i < band.length; i++) {
+    const v = band[i];
+    const o = i * 4;
+    if (nodata !== null && v === nodata) {
+      imgData.data[o + 3] = 0;
+      continue;
+    }
+    const [r, g, b] = rampColor(ramp, (v - min) / range);
+    imgData.data[o] = r;
+    imgData.data[o + 1] = g;
+    imgData.data[o + 2] = b;
+    imgData.data[o + 3] = 220;
+  }
+  ctx.putImageData(imgData, 0, 0);
+  return canvas.toDataURL();
+}

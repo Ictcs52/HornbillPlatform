@@ -2,7 +2,7 @@ const T = {
   en: {
     top: { title: 'Hornbill Habitat Model × GIS', subtitle: 'A prototype tool combining MaxEnt-style habitat modeling with an interactive vector map — all on one page. Loads real occurrence data and real climate rasters by default; upload your own environmental layers, then click Run.' },
     envLayers: { title: 'Environmental Layers' },
-    mapPanel: { title: 'Prediction Map', distribution: 'Hornbill Distribution', compare: 'Compare Scenario', low: 'Low', high: 'High', denseForest: 'Dense / primary forest', secondaryForest: 'Secondary / mixed forest' },
+    mapPanel: { title: 'Prediction Map', distribution: 'Hornbill Distribution', rainfallMap: 'Rainfall Map', temperatureMap: 'Temperature Map', compare: 'Compare Scenario', low: 'Low', high: 'High', denseForest: 'Dense / primary forest', secondaryForest: 'Secondary / mixed forest', rasterNotLoaded: 'This raster hasn’t loaded yet — upload a .tif in Environmental Layers, or wait for the default to finish loading.' },
     results: { title: 'Results', responseCurves: 'Response Curves', variableImportance: 'Variable Importance', noResults: 'No results yet — load environmental layers then click Run.' },
     modelStatus: { loading: 'Loading…', running: 'Running…', complete: 'Complete', notrun: 'Not run' },
     layers: { addBtn: '+ Add Variable', ready: 'Ready', notLoaded: 'Not loaded', groups: { Topography: 'Topography', Vegetation: 'Vegetation', Climate: 'Climate', 'Human Disturbance': 'Human Disturbance' },
@@ -11,7 +11,7 @@ const T = {
     simulation: { running: 'Running…', runAgain: 'Run Again', run: 'Run', notePipeline: 'Processing pipeline in progress', noteComplete: 'Model run complete', noteReady: 'Ready to run', noteBlocked: 'Load at least one environmental layer raster first' },
     suitability: { mean: 'Mean HSI (occurrence pts):' },
     risk: { highArea: 'High-risk occurrence points:', ofArea: 'show declining suitability under this scenario' },
-    map: { basemap: 'Basemap', realNote: 'Live OpenStreetMap basemap and real occurrence records from GBIF.' },
+    map: { basemap: 'Basemap', realNote: 'Live OpenStreetMap basemap and real occurrence records from GBIF.', rasterNote: 'Real TMD Climate Atlas data (1991–2020), interpolated from weather stations — see rnd.tmd.go.th/climateatlas.' },
     variables: { 'Forest Patch Size': 'Forest Patch Size', 'NDVI (Vegetation Index)': 'NDVI (Vegetation Index)', 'Canopy Density': 'Canopy Density', 'Elevation': 'Elevation', 'Distance to Road': 'Distance to Road', 'Mean Annual Rainfall': 'Mean Annual Rainfall', 'Distance to River': 'Distance to River', 'Slope': 'Slope', 'Mean Temperature': 'Mean Temperature', 'Distance to Settlement': 'Distance to Settlement', 'Mean PM2.5 (Dust)': 'Mean PM2.5 (Dust)' },
     climate: {
       title: 'Future Climate Scenario', optimalTitle: 'Optimal conditions (current)',
@@ -24,7 +24,7 @@ const T = {
   th: {
     top: { title: 'แบบจำลองถิ่นอาศัยนกเงือก × GIS', subtitle: 'ต้นแบบเครื่องมือที่รวมการสร้างแบบจำลองถิ่นอาศัยสไตล์ MaxEnt เข้ากับแผนที่ GIS แบบโต้ตอบในหน้าเดียว — มีข้อมูลจุดพบจริงและราสเตอร์ภูมิอากาศจริงให้พร้อมใช้ อัปโหลดชั้นข้อมูลสิ่งแวดล้อมของคุณเองแล้วกด Run' },
     envLayers: { title: 'ชั้นข้อมูลสิ่งแวดล้อม' },
-    mapPanel: { title: 'แผนที่ผลการทำนาย', distribution: 'การกระจายพันธุ์นกเงือก', compare: 'เทียบสถานการณ์', low: 'ต่ำ', high: 'สูง', denseForest: 'ป่าดิบชื้น (หนาแน่น)', secondaryForest: 'ป่าเบญจพรรณ/รอง' },
+    mapPanel: { title: 'แผนที่ผลการทำนาย', distribution: 'การกระจายพันธุ์นกเงือก', rainfallMap: 'แผนที่ปริมาณฝน', temperatureMap: 'แผนที่อุณหภูมิ', compare: 'เทียบสถานการณ์', low: 'ต่ำ', high: 'สูง', denseForest: 'ป่าดิบชื้น (หนาแน่น)', secondaryForest: 'ป่าเบญจพรรณ/รอง', rasterNotLoaded: 'ยังไม่ได้โหลดราสเตอร์นี้ — อัปโหลดไฟล์ .tif ที่การ์ดชั้นข้อมูลสิ่งแวดล้อม หรือรอให้ค่าเริ่มต้นโหลดเสร็จ' },
     results: { title: 'ผลลัพธ์', responseCurves: 'กราฟความสัมพันธ์ตัวแปร (Response Curves)', variableImportance: 'อิทธิพลของตัวแปร (Variable Importance)', noResults: 'ยังไม่มีผลลัพธ์ — โหลดชั้นข้อมูลสิ่งแวดล้อมแล้วกด Run' },
     modelStatus: { loading: 'กำลังโหลด…', running: 'กำลังประมวลผล…', complete: 'เสร็จสมบูรณ์', notrun: 'ยังไม่รัน' },
     layers: { addBtn: '+ เพิ่มตัวแปร', ready: 'พร้อม', notLoaded: 'ยังไม่โหลด', groups: { Topography: 'ภูมิประเทศ', Vegetation: 'พืชพรรณ', Climate: 'ภูมิอากาศ', 'Human Disturbance': 'สิ่งรบกวนจากมนุษย์' },
@@ -33,7 +33,7 @@ const T = {
     simulation: { running: 'กำลังรัน…', runAgain: 'รันอีกครั้ง', run: 'Run', notePipeline: 'กำลังประมวลผลตามขั้นตอน', noteComplete: 'รันแบบจำลองเสร็จแล้ว', noteReady: 'พร้อมรัน', noteBlocked: 'กรุณาโหลดชั้นข้อมูลสิ่งแวดล้อมอย่างน้อย 1 ชั้นก่อน' },
     suitability: { mean: 'ค่าเฉลี่ย HSI (จุดพบ):' },
     risk: { highArea: 'จุดพบที่มีความเสี่ยงสูง:', ofArea: 'มีความเหมาะสมลดลงในสถานการณ์นี้' },
-    map: { basemap: 'แผนที่ฐาน', realNote: 'แผนที่ฐาน OpenStreetMap จริง และข้อมูลจุดพบนกจริงจาก GBIF' },
+    map: { basemap: 'แผนที่ฐาน', realNote: 'แผนที่ฐาน OpenStreetMap จริง และข้อมูลจุดพบนกจริงจาก GBIF', rasterNote: 'ข้อมูลจริงจาก TMD Climate Atlas (พ.ศ. 2534-2563) แทรกค่าจากสถานีตรวจอากาศ — ดูที่ rnd.tmd.go.th/climateatlas' },
     variables: { 'Forest Patch Size': 'ขนาดผืนป่าต่อเนื่อง', 'NDVI (Vegetation Index)': 'ดัชนีพืชพรรณ (NDVI)', 'Canopy Density': 'ความหนาแน่นเรือนยอด', 'Elevation': 'ระดับความสูง', 'Distance to Road': 'ระยะห่างจากถนน', 'Mean Annual Rainfall': 'ปริมาณน้ำฝนเฉลี่ยรายปี', 'Distance to River': 'ระยะห่างจากแม่น้ำ', 'Slope': 'ความลาดชัน', 'Mean Temperature': 'อุณหภูมิเฉลี่ย', 'Distance to Settlement': 'ระยะห่างจากชุมชน', 'Mean PM2.5 (Dust)': 'ฝุ่น PM2.5 เฉลี่ย' },
     climate: {
       title: 'จำลองสถานการณ์อนาคต', optimalTitle: 'ค่าที่เหมาะสมที่สุด (ปัจจุบัน)',
