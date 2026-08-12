@@ -11,6 +11,7 @@
     running: false,
     runProgress: 0,
     modelRun: false,
+    fittedModel: null,
     log: [],
     uploads: [],
     dataSource: 'sample', // 'sample' | 'upload'
@@ -315,26 +316,36 @@
 
   function runModel() {
     if (state.running) return;
-    const steps = PROCESSING_STEPS;
     state.running = true;
     state.runProgress = 0;
     state.log = [];
     state.modelRun = false;
     render();
-    let i = 0;
-    const tick = () => {
-      i++;
-      state.log = [...state.log, steps[i - 1]];
-      state.runProgress = Math.round((i / steps.length) * 100);
-      if (i < steps.length) {
-        runTimer = setTimeout(tick, 420);
-      } else {
-        state.running = false;
-        state.modelRun = true;
-      }
-      render();
-    };
-    runTimer = setTimeout(tick, 300);
+    // Deferred so the "Running…" state paints before the (synchronous, but
+    // sub-second) model fit blocks the main thread.
+    setTimeout(() => {
+      const presencePoints = getAllOccurrencePoints();
+      const usableVars = ['temp', 'rainfall', 'dust'].filter(id => {
+        const layer = state.layers.find(l => l.id === LAYER_ID_BY_CURVE_ID[id]);
+        return layer && layer.raster;
+      });
+      state.fittedModel = fitHabitatModel(presencePoints, usableVars);
+      const steps = buildRunLogLines(state.fittedModel);
+      let i = 0;
+      const tick = () => {
+        i++;
+        state.log = [...state.log, steps[i - 1]];
+        state.runProgress = Math.round((i / steps.length) * 100);
+        if (i < steps.length) {
+          runTimer = setTimeout(tick, 420);
+        } else {
+          state.running = false;
+          state.modelRun = true;
+        }
+        render();
+      };
+      runTimer = setTimeout(tick, 300);
+    }, 30);
   }
 
   const ACTIONS = {
@@ -403,18 +414,218 @@
     }
   });
 
-  // Piecewise-linear lookup of a response curve at a real (non-normalized) value.
-  function evalCurveAt(curve, value) {
-    const x = Math.max(0, Math.min(1, (value - curve.min) / (curve.max - curve.min)));
-    const pts = curve.points;
-    for (let i = 1; i < pts.length; i++) {
-      if (x <= pts[i].x) {
-        const p0 = pts[i - 1], p1 = pts[i];
-        const t = (x - p0.x) / ((p1.x - p0.x) || 1);
-        return p0.y + t * (p1.y - p0.y);
+  // --- Real habitat-suitability model, fit at Run time from the currently
+  // loaded data (presence points vs. sampled background) instead of reading
+  // canned response-curve/importance constants. Presence = occurrence points
+  // of the active species set; background = random points inside the
+  // Thailand outline, both sampled against whichever of temp/rainfall/dust
+  // are actually loaded. Logistic regression (L2, gradient descent) gives a
+  // real Mean HSI, real partial-dependence response curves, real permutation
+  // variable importance, and a real 5-fold cross-validated AUC.
+
+  function getAllOccurrencePoints() {
+    const usingUpload = state.dataSource === 'upload' && state.uploadedSpecies;
+    const activeSpecies = usingUpload ? state.uploadedSpecies : SPECIES;
+    return activeSpecies.flatMap(sp => sp.points);
+  }
+
+  function sigmoid(z) { return 1 / (1 + Math.exp(-z)); }
+
+  function standardizeCol(values) {
+    const n = values.length;
+    const mean = values.reduce((a, b) => a + b, 0) / n;
+    const variance = values.reduce((a, b) => a + (b - mean) * (b - mean), 0) / n;
+    return { mean, std: Math.sqrt(variance) || 1 };
+  }
+
+  function zRow(stats, row) {
+    return row.map((v, j) => (v - stats[j].mean) / stats[j].std);
+  }
+
+  // Batch gradient descent, L2-regularized binary logistic regression.
+  function fitLogisticRegression(X, y, opts) {
+    const nFeat = X[0].length;
+    const n = X.length;
+    const lr = (opts && opts.lr) || 0.3;
+    const iters = (opts && opts.iters) || 300;
+    const l2 = (opts && opts.l2) || 0.02;
+    const weights = new Array(nFeat).fill(0);
+    let bias = 0;
+    for (let it = 0; it < iters; it++) {
+      const gradW = new Array(nFeat).fill(0);
+      let gradB = 0;
+      for (let i = 0; i < n; i++) {
+        const xi = X[i];
+        let z = bias;
+        for (let j = 0; j < nFeat; j++) z += weights[j] * xi[j];
+        const err = sigmoid(z) - y[i];
+        for (let j = 0; j < nFeat; j++) gradW[j] += err * xi[j];
+        gradB += err;
       }
+      for (let j = 0; j < nFeat; j++) weights[j] -= lr * (gradW[j] / n + l2 * weights[j]);
+      bias -= lr * (gradB / n);
     }
-    return pts[pts.length - 1].y;
+    return { weights, bias };
+  }
+
+  function predictProb(model, row) {
+    let z = model.bias;
+    for (let j = 0; j < row.length; j++) z += model.weights[j] * row[j];
+    return sigmoid(z);
+  }
+
+  // Mann-Whitney AUC: probability a random presence scores above a random
+  // background point. Ties get the average rank.
+  function computeAUC(scores, labels) {
+    const n = scores.length;
+    const order = scores.map((s, i) => i).sort((a, b) => scores[a] - scores[b]);
+    const ranks = new Array(n);
+    let i = 0;
+    while (i < n) {
+      let j = i;
+      while (j < n && scores[order[j]] === scores[order[i]]) j++;
+      const avgRank = (i + 1 + j) / 2;
+      for (let k = i; k < j; k++) ranks[order[k]] = avgRank;
+      i = j;
+    }
+    let sumRanksPos = 0, nPos = 0, nNeg = 0;
+    for (let k = 0; k < n; k++) {
+      if (labels[k] === 1) { sumRanksPos += ranks[k]; nPos++; } else nNeg++;
+    }
+    if (!nPos || !nNeg) return null;
+    return (sumRanksPos - nPos * (nPos + 1) / 2) / (nPos * nNeg);
+  }
+
+  function kFoldAUC(X, y, k, fitOpts) {
+    const n = X.length;
+    const idx = Array.from({ length: n }, (_, i) => i);
+    for (let i = n - 1; i > 0; i--) {
+      const r = Math.floor(Math.random() * (i + 1));
+      [idx[i], idx[r]] = [idx[r], idx[i]];
+    }
+    const foldSize = Math.ceil(n / k);
+    const aucs = [];
+    for (let f = 0; f < k; f++) {
+      const testSet = new Set(idx.slice(f * foldSize, (f + 1) * foldSize));
+      const trainX = [], trainY = [], testX = [], testY = [];
+      for (let i = 0; i < n; i++) {
+        if (testSet.has(i)) { testX.push(X[i]); testY.push(y[i]); }
+        else { trainX.push(X[i]); trainY.push(y[i]); }
+      }
+      if (!trainX.length || !testX.length) continue;
+      const m = fitLogisticRegression(trainX, trainY, fitOpts);
+      const auc = computeAUC(testX.map(row => predictProb(m, row)), testY);
+      if (auc !== null) aucs.push(auc);
+    }
+    return aucs.length ? aucs.reduce((a, b) => a + b, 0) / aucs.length : null;
+  }
+
+  // Rounds importance shares to whole percentages while keeping them summing
+  // to exactly 100 (largest-remainder method), so the UI never shows e.g. a
+  // 33/34/32 split that visibly fails to add up.
+  function roundSharesTo100(shares) {
+    const floors = shares.map(Math.floor);
+    let remainder = 100 - floors.reduce((a, b) => a + b, 0);
+    const order = shares.map((v, i) => ({ i, frac: v - floors[i] })).sort((a, b) => b.frac - a.frac);
+    for (let k = 0; k < remainder && k < order.length; k++) floors[order[k].i]++;
+    return floors;
+  }
+
+  const BACKGROUND_N = 3000;
+  const FIT_OPTS = { lr: 0.3, iters: 180, l2: 0.02 };
+
+  function fitHabitatModel(presencePoints, varIds) {
+    if (!varIds.length) return null;
+    const rasters = varIds.map(id => state.layers.find(l => l.id === LAYER_ID_BY_CURVE_ID[id]).raster);
+
+    const presenceX = [];
+    presencePoints.forEach(([lat, lon]) => {
+      const row = rasters.map(r => sampleRasterAt(r, lat, lon));
+      if (row.every(v => v !== null)) presenceX.push(row);
+    });
+    if (presenceX.length < 10) return null;
+
+    const outline = state.thailandOutline || THAILAND_BOUNDARY;
+    const bbox = rasters[0].bbox;
+    const backgroundX = [];
+    const maxAttempts = BACKGROUND_N * 40;
+    let attempts = 0;
+    while (backgroundX.length < BACKGROUND_N && attempts < maxAttempts) {
+      attempts++;
+      const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
+      const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
+      if (!pointInGeoJSON(lat, lon, outline)) continue;
+      const row = rasters.map(r => sampleRasterAt(r, lat, lon));
+      if (row.every(v => v !== null)) backgroundX.push(row);
+    }
+    if (backgroundX.length < 10) return null;
+
+    const nFeat = varIds.length;
+    const allX = presenceX.concat(backgroundX);
+    const stats = [];
+    for (let j = 0; j < nFeat; j++) stats.push(standardizeCol(allX.map(r => r[j])));
+
+    const X = presenceX.map(r => zRow(stats, r)).concat(backgroundX.map(r => zRow(stats, r)));
+    const y = new Array(presenceX.length).fill(1).concat(new Array(backgroundX.length).fill(0));
+
+    const model = fitLogisticRegression(X, y, FIT_OPTS);
+    const cvAUC = kFoldAUC(X, y, 5, FIT_OPTS);
+
+    const fullProbs = X.map(row => predictProb(model, row));
+    const baseAUC = computeAUC(fullProbs, y) || 0.5;
+    const importances = varIds.map((id, j) => {
+      const shuffledCol = X.map(row => row[j]);
+      for (let k = shuffledCol.length - 1; k > 0; k--) {
+        const r = Math.floor(Math.random() * (k + 1));
+        [shuffledCol[k], shuffledCol[r]] = [shuffledCol[r], shuffledCol[k]];
+      }
+      const shuffledProbs = X.map((row, i) => predictProb(model, row.map((v, jj) => jj === j ? shuffledCol[i] : v)));
+      const shuffledAUC = computeAUC(shuffledProbs, y) || 0.5;
+      return Math.max(0, baseAUC - shuffledAUC);
+    });
+    const impSum = importances.reduce((a, b) => a + b, 0);
+    const importancePct = impSum > 0
+      ? roundSharesTo100(importances.map(v => 100 * v / impSum))
+      : roundSharesTo100(varIds.map(() => 100 / varIds.length));
+
+    const curvePoints = 24;
+    const curves = varIds.map((id, j) => {
+      const colVals = allX.map(r => r[j]);
+      const min = Math.min(...colVals), max = Math.max(...colVals);
+      const points = [];
+      for (let k = 0; k <= curvePoints; k++) {
+        const raw = min + (k / curvePoints) * (max - min);
+        const rowRaw = stats.map((s, jj) => jj === j ? raw : s.mean);
+        points.push({ x: k / curvePoints, y: predictProb(model, zRow(stats, rowRaw)) });
+      }
+      return { id, min, max, points };
+    });
+
+    const presenceProbs = presenceX.map(r => predictProb(model, zRow(stats, r)));
+    const meanHSI = presenceProbs.reduce((a, b) => a + b, 0) / presenceProbs.length;
+
+    return {
+      varIds, model, stats, cvAUC, meanHSI,
+      nPresence: presenceX.length, nBackground: backgroundX.length,
+      curvesById: Object.fromEntries(curves.map(c => [c.id, c])),
+      importancePct
+    };
+  }
+
+  function buildRunLogLines(fit) {
+    if (!fit) return PROCESSING_STEPS;
+    const varNames = fit.varIds.map(id => (RESPONSE_CURVES.find(c => c.id === id) || {}).variable || id).join(', ');
+    return [
+      `Loading ${fit.nPresence.toLocaleString()} occurrence records for selected species…`,
+      `Sampling ${varNames} at each occurrence point…`,
+      `Generating background (pseudo-absence) sample, n = ${fit.nBackground.toLocaleString()}…`,
+      `Fitting regularized logistic response (${fit.varIds.length} predictor${fit.varIds.length > 1 ? 's' : ''})…`,
+      `Cross-validating model, 5-fold — mean AUC ${fit.cvAUC !== null ? fit.cvAUC.toFixed(2) : 'n/a'}…`,
+      `Predicting habitat suitability at occurrence points — mean HSI ${fit.meanHSI.toFixed(2)}…`,
+      `Simulating future climate scenario and recomputing suitability…`,
+      `Deriving risk classes from suitability change…`,
+      `Model run complete.`
+    ];
   }
 
   // RESPONSE_CURVES ids ('temp') don't match ENV_LAYERS ids ('temperature');
@@ -543,58 +754,62 @@
     const runBtnColor = st.running ? '#8a8f80' : 'linear-gradient(135deg, #4f7942, #1f7a8a)';
     const canRunNote = st.running ? t.simulation.notePipeline : (st.modelRun ? t.simulation.noteComplete : (canRun ? t.simulation.noteReady : t.simulation.noteBlocked));
 
-    const contribBars = VARIABLE_CONTRIBUTION.map(v => ({ ...v, displayName: t.variables[v.name] || v.name, width: Math.round((v.pct / 40) * 100) }));
+    // fm is null until Run has been clicked with at least one climate layer
+    // (temp/rainfall/dust) loaded — see fitHabitatModel(). Everything below
+    // falls back to the illustrative RESPONSE_CURVES/VARIABLE_CONTRIBUTION
+    // shapes (used pre-Run just to size the delta inputs) when it's absent.
+    const fm = st.modelRun ? st.fittedModel : null;
 
-    const pctById = {};
-    RESPONSE_CURVES.forEach(c => {
-      const vc = VARIABLE_CONTRIBUTION.find(v => v.name === c.variable);
-      pctById[c.id] = vc ? vc.pct : 1;
-    });
+    const contribBars = fm
+      ? fm.varIds.map((id, j) => {
+          const name = (RESPONSE_CURVES.find(c => c.id === id) || {}).variable || id;
+          const pct = fm.importancePct[j];
+          return { name, pct, displayName: t.variables[name] || name, width: Math.min(100, Math.round((pct / 40) * 100)) };
+        }).sort((a, b) => b.pct - a.pct)
+      : VARIABLE_CONTRIBUTION.map(v => ({ ...v, displayName: t.variables[v.name] || v.name, width: Math.round((v.pct / 40) * 100) }));
 
     const deltaByVarId = { temp: st.settings.tempDelta, rainfall: st.settings.rainfallDelta, dust: st.settings.dustDelta };
     const responseCurves = RESPONSE_CURVES.map(c => {
       const layer = st.layers.find(l => l.id === (LAYER_ID_BY_CURVE_ID[c.id] || c.id));
       const observedMedian = layer && layer.raster ? medianRasterValueAtPoints(layer.raster, allOccurrencePoints) : null;
-      const peakPt = c.points.reduce((best, p) => p.y > best.y ? p : best, c.points[0]);
-      const curveOptimal = c.min + peakPt.x * (c.max - c.min);
+      const fitted = fm && fm.curvesById[c.id];
+      const min = fitted ? fitted.min : c.min;
+      const max = fitted ? fitted.max : c.max;
+      const points = fitted ? fitted.points : c.points;
+      const peakPt = points.reduce((best, p) => p.y > best.y ? p : best, points[0]);
+      const curveOptimal = min + peakPt.x * (max - min);
       const optimalValue = observedMedian !== null ? observedMedian : curveOptimal;
       const delta = deltaByVarId[c.id] || 0;
-      const projectedValue = Math.min(c.max, Math.max(c.min, optimalValue + delta));
+      const projectedValue = Math.min(max, Math.max(min, optimalValue + delta));
       const decimals = c.id === 'rainfall' ? 0 : 1;
       return {
-        ...c, displayName: t.variables[c.variable] || c.variable,
+        ...c, min, max, points, displayName: t.variables[c.variable] || c.variable,
+        fitted: !!fitted,
         optimalValue, projectedValue, decimals,
         optimalFmt: optimalValue.toFixed(decimals),
         projectedFmt: projectedValue.toFixed(decimals),
         deltaFmt: (delta > 0 ? '+' : '') + delta.toFixed(decimals),
-        pathSmall: 'M' + c.points.map(p => (p.x * 130).toFixed(1) + ',' + (60 - p.y * 60).toFixed(1)).join(' L ')
+        pathSmall: 'M' + points.map(p => (p.x * 130).toFixed(1) + ',' + (60 - p.y * 60).toFixed(1)).join(' L ')
       };
     });
 
-    // Per-point risk: for each occurrence point, sample the loaded rainfall/
-    // temperature/dust rasters at that location, evaluate the response curve
-    // at the current vs. delta-shifted value, and weight the suitability
-    // drop by each variable's model contribution. Falls back to "no data"
-    // wherever a layer isn't loaded (e.g. dust, which has no default raster).
+    // Per-point risk: sample the loaded predictor rasters at the point,
+    // build the "current" and delta-shifted feature rows, and take the
+    // fitted model's predicted-probability drop between them — a real
+    // prediction from the fitted logistic model, not a canned curve lookup.
     function pointRisk(lat, lon) {
-      let weightedDrop = 0, weightSum = 0;
-      RESPONSE_CURVES.forEach(c => {
-        const layer = st.layers.find(l => l.id === (LAYER_ID_BY_CURVE_ID[c.id] || c.id));
-        if (!layer || !layer.raster) return;
-        const v = sampleRasterAt(layer.raster, lat, lon);
-        if (v === null) return;
-        const delta = deltaByVarId[c.id] || 0;
-        const curY = evalCurveAt(c, v);
-        const projY = evalCurveAt(c, v + delta);
-        const w = pctById[c.id] || 1;
-        weightedDrop += w * (curY - projY);
-        weightSum += w;
-      });
-      return weightSum ? weightedDrop / weightSum : null;
+      if (!fm) return null;
+      const rasters = fm.varIds.map(id => st.layers.find(l => l.id === LAYER_ID_BY_CURVE_ID[id]).raster);
+      const rawCur = rasters.map(r => sampleRasterAt(r, lat, lon));
+      if (rawCur.some(v => v === null)) return null;
+      const rawProj = fm.varIds.map((id, j) => rawCur[j] + (deltaByVarId[id] || 0));
+      const curP = predictProb(fm.model, zRow(fm.stats, rawCur));
+      const projP = predictProb(fm.model, zRow(fm.stats, rawProj));
+      return curP - projP;
     }
 
     let highRiskPct = 0;
-    if (st.modelRun) {
+    if (fm) {
       const risks = allOccurrencePoints.map(([lat, lon]) => pointRisk(lat, lon)).filter(r => r !== null);
       highRiskPct = risks.length ? Math.round(100 * risks.filter(r => r > 0.05).length / risks.length) : 0;
     }
@@ -632,7 +847,8 @@
       lastLogLines: st.log.slice(-3),
       mapTab: st.mapTab, rasterTabInfo,
       visiblePoints, modelRun: st.modelRun, notRun: !st.modelRun, highRiskPct,
-      contribBars, responseCurves, pointRisk
+      contribBars, responseCurves, pointRisk,
+      meanHSI: fm ? fm.meanHSI : null, cvAUC: fm ? fm.cvAUC : null
     };
   }
 
@@ -765,7 +981,7 @@
       })()}
       ${v.modelRun ? `
         <div class="climate-stats" style="margin-top:14px">
-          ${v.responseCurves.map(cv => `
+          ${v.responseCurves.filter(cv => cv.fitted).map(cv => `
             <div class="climate-stat-row"><div class="climate-stat-label">${esc(t.climate.projectedLabel)}: ${esc(cv.displayName)}</div><div class="climate-stat-value">${cv.projectedFmt} ${esc(cv.unit)}</div></div>`).join('')}
         </div>` : ''}
       <div class="climate-note">${esc(t.climate.note)}</div>
@@ -788,11 +1004,14 @@
 
     html += `<div class="card accent-orange">
       <div class="panel-head"><div class="badge badge-orange">05</div><div class="panel-title">${esc(t.results.title)}</div></div>
-      ${v.notRun ? `<div class="results-empty">${esc(t.results.noResults)}</div>` : `<div class="results-summary">${esc(t.suitability.mean)} <b style="color:#23281f">0.78</b></div>`}
+      ${v.notRun ? `<div class="results-empty">${esc(t.results.noResults)}</div>`
+        : v.meanHSI === null ? `<div class="results-empty">${esc(t.suitability.noModel)}</div>`
+        : `<div class="results-summary">${esc(t.suitability.mean)} <b style="color:#23281f">${v.meanHSI.toFixed(2)}</b></div>
+           <div class="results-summary" style="margin-top:4px">${esc(t.suitability.cvAuc)} <b style="color:#23281f">${v.cvAUC !== null ? v.cvAUC.toFixed(2) : '—'}</b></div>`}
       ${v.modelRun ? `
         <div class="climate-sub-title" style="margin-top:12px">${esc(t.climate.optimalTitle)}</div>
         <div class="climate-stats">
-          ${v.responseCurves.map(cv => `
+          ${v.responseCurves.filter(cv => cv.fitted).map(cv => `
             <div class="climate-stat-row"><div class="climate-stat-label">${esc(cv.displayName)}</div><div class="climate-stat-value">${cv.optimalFmt} ${esc(cv.unit)}</div></div>`).join('')}
         </div>` : ''}
     </div>`;
@@ -804,7 +1023,7 @@
       </div>
       ${v.modelRun ? `
         <div class="curve-grid">
-          ${v.responseCurves.map(c => `
+          ${v.responseCurves.filter(c => c.fitted).map(c => `
             <div class="curve-card">
               <div class="curve-title">${esc(c.displayName)}</div>
               <svg viewBox="0 0 130 70" style="width:100%;height:auto;display:block;margin-top:4px">
