@@ -806,6 +806,26 @@
     updateLeafletLayers(v);
   }
 
+  const DEFAULT_RASTERS = [
+    { layerId: 'rainfall', url: './assets/rasters/rainfall_annual_tmd_1991-2020.tif', name: 'rainfall_annual_tmd_1991-2020.tif' },
+    { layerId: 'temperature', url: './assets/rasters/mean_temp_annual_tmd_1991-2020.tif', name: 'mean_temp_annual_tmd_1991-2020.tif' }
+  ];
+
+  function loadDefaultRasters() {
+    DEFAULT_RASTERS.forEach(({ layerId, url, name }) => {
+      state.layers = state.layers.map(l => l.id === layerId ? { ...l, status: 'processing' } : l);
+      render();
+      fetchGeoTiff(url, name).then(raster => {
+        state.layers = state.layers.map(l => l.id === layerId ? { ...l, status: 'ready', raster, fileName: name, sizeMB: raster.sizeMB } : l);
+        render();
+      }).catch(err => {
+        state.layers = state.layers.map(l => l.id === layerId ? { ...l, status: 'not_loaded' } : l);
+        console.error(err);
+        render();
+      });
+    });
+  }
+
   function boot() {
     initMap();
     render();
@@ -816,6 +836,7 @@
       })
       .then(geo => { state.boundaries = geo; render(); })
       .catch(err => console.error(err));
+    loadDefaultRasters();
   }
 
   boot();

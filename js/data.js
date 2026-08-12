@@ -30,8 +30,8 @@ const ENV_LAYERS = [
   { id: 'forestcover', name: 'Forest Cover Type', group: 'Vegetation', resolution: '100m', source: 'RFD Forest Cover 2024', status: 'not_loaded', keywords: ['forestcover', 'forest_cover', 'forest_type', 'landcover'] },
   { id: 'canopy', name: 'Canopy Density', group: 'Vegetation', resolution: '100m', source: 'LiDAR-derived proxy', status: 'not_loaded', keywords: ['canopy'] },
   { id: 'patchsize', name: 'Forest Patch Size', group: 'Vegetation', resolution: '100m', source: 'Derived from Forest Cover', status: 'not_loaded', keywords: ['patchsize', 'patch_size', 'forestpatch'] },
-  { id: 'rainfall', name: 'Mean Annual Rainfall', group: 'Climate', resolution: '1km', source: 'TMD interpolated', status: 'not_loaded', keywords: ['rainfall', 'rain', 'precip'] },
-  { id: 'temperature', name: 'Mean Temperature', group: 'Climate', resolution: '1km', source: 'WorldClim', status: 'not_loaded', keywords: ['temperature', 'temp'] },
+  { id: 'rainfall', name: 'Mean Annual Rainfall', group: 'Climate', resolution: '2.5km', source: 'TMD Climate Atlas 1991–2020, IDW from 86 stations', status: 'not_loaded', keywords: ['rainfall', 'rain', 'precip'] },
+  { id: 'temperature', name: 'Mean Temperature', group: 'Climate', resolution: '2.5km', source: 'TMD Climate Atlas 1991–2020, IDW from 87 stations', status: 'not_loaded', keywords: ['temperature', 'temp'] },
   { id: 'road', name: 'Distance to Road', group: 'Human Disturbance', resolution: '30m', source: 'OSM (Geofabrik)', status: 'not_loaded', keywords: ['road', 'dist_road', 'distance_to_road'] },
   { id: 'settlement', name: 'Distance to Settlement', group: 'Human Disturbance', resolution: '30m', source: 'OSM (Geofabrik)', status: 'not_loaded', keywords: ['settlement', 'dist_settlement', 'village'] },
   { id: 'river', name: 'Distance to River', group: 'Human Disturbance', resolution: '30m', source: 'OSM (Geofabrik)', status: 'not_loaded', keywords: ['river', 'water', 'dist_water', 'stream'] }

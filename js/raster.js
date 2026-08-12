@@ -30,8 +30,7 @@ function guessLayerForFilename(filename, layers) {
   return best;
 }
 
-async function parseGeoTiffFile(file) {
-  const buf = await file.arrayBuffer();
+async function parseGeoTiffArrayBuffer(buf, fileName, sizeBytes) {
   const tiff = await GeoTIFF.fromArrayBuffer(buf);
   const image = await tiff.getImage();
   const width = image.getWidth();
@@ -60,8 +59,8 @@ async function parseGeoTiffFile(file) {
   }
 
   return {
-    fileName: file.name,
-    sizeMB: file.size / (1024 * 1024),
+    fileName,
+    sizeMB: sizeBytes / (1024 * 1024),
     width, height, bbox,
     resX: Math.abs(resX), resY: Math.abs(resY),
     epsg, nodata,
@@ -69,6 +68,18 @@ async function parseGeoTiffFile(file) {
     max: isFinite(max) ? max : null,
     band
   };
+}
+
+async function parseGeoTiffFile(file) {
+  const buf = await file.arrayBuffer();
+  return parseGeoTiffArrayBuffer(buf, file.name, file.size);
+}
+
+async function fetchGeoTiff(url, displayName) {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('Failed to fetch ' + url);
+  const buf = await resp.arrayBuffer();
+  return parseGeoTiffArrayBuffer(buf, displayName, buf.byteLength);
 }
 
 // Nearest-cell lookup — null if the point falls outside the raster or on a nodata cell.
