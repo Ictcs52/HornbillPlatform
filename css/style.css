@@ -109,6 +109,7 @@ a:hover { color: #2f5570; }
 .raster-info { margin-top: 5px; font-size: 10px; color: #6b7062; line-height: 1.6; }
 .raster-info-file { font-family: ui-monospace, monospace; font-weight: 600; color: #23281f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .raster-info-row { color: #8a8f80; }
+.raster-info-row a { color: #4f7942; }
 .raster-warning { color: #c1573a; font-weight: 600; margin-top: 3px; }
 .raster-change { color: #4f7942; font-weight: 600; cursor: pointer; margin-top: 4px; }
 

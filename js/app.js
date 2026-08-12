@@ -378,6 +378,7 @@
                 <div class="raster-info-row">${esc(t.layers.resolution)}: ${l.raster.resX.toFixed(4)}  |  CRS: ${esc(l.crsLabel)}</div>
                 <div class="raster-info-row">${esc(t.layers.valueRange)}: ${esc(l.rangeLabel)}  |  NoData: ${esc(l.nodataLabel)}</div>
                 <div class="raster-info-row">${esc(t.layers.extent)}: ${esc(l.bboxLabel)}</div>
+                ${l.source ? `<div class="raster-info-row">${esc(t.layers.source)}: ${l.sourceUrl ? `<a href="${esc(l.sourceUrl)}" target="_blank" rel="noopener">${esc(l.source)}</a>` : esc(l.source)}</div>` : ''}
                 ${l.outsideCount > 0 ? `<div class="raster-warning">⚠ ${l.outsideCount.toLocaleString()} ${esc(t.layers.pointsOutside)}</div>` : ''}
                 <div class="raster-change" data-action="removeRasterFromLayer" data-id="${l.id}">${esc(t.layers.changeFile)}</div>
               </div>` : l.status === 'error' ? `<div class="raster-warning">⚠ ${esc(l.error || '')}</div>` : `

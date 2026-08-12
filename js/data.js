@@ -17,8 +17,8 @@ const SPECIES = [
 // rainfall, dust) — the earlier 12-variable topography/vegetation/human
 // disturbance set has been dropped to match.
 const ENV_LAYERS = [
-  { id: 'rainfall', name: 'Mean Annual Rainfall', group: 'Climate', resolution: '2.5km', source: 'TMD Climate Atlas 1991–2020, IDW from 86 stations', status: 'not_loaded', keywords: ['rainfall', 'rain', 'precip'] },
-  { id: 'temperature', name: 'Mean Temperature', group: 'Climate', resolution: '2.5km', source: 'TMD Climate Atlas 1991–2020, IDW from 87 stations', status: 'not_loaded', keywords: ['temperature', 'temp'] },
+  { id: 'rainfall', name: 'Mean Annual Rainfall', group: 'Climate', resolution: '2.5km', source: 'TMD Climate Atlas 1991–2020, IDW from 86 stations', sourceUrl: 'http://www.rnd.tmd.go.th/climateatlas/', status: 'not_loaded', keywords: ['rainfall', 'rain', 'precip'] },
+  { id: 'temperature', name: 'Mean Temperature', group: 'Climate', resolution: '2.5km', source: 'TMD Climate Atlas 1991–2020, IDW from 87 stations', sourceUrl: 'http://www.rnd.tmd.go.th/climateatlas/', status: 'not_loaded', keywords: ['temperature', 'temp'] },
   { id: 'dust', name: 'Mean PM2.5 (Dust)', group: 'Climate', resolution: '1km', source: 'User-provided (e.g. PCD, CAMS)', status: 'not_loaded', keywords: ['dust', 'pm25', 'pm2.5', 'pm', 'aqi', 'airquality', 'air_quality'] }
 ];
 
