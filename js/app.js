@@ -609,7 +609,13 @@
         const [west, south, east, north] = layer.raster.bbox;
         rasterOverlay = L.imageOverlay(layer.raster.imgUrl, [[south, west], [north, east]], { opacity: 0.95 }).addTo(map);
         if (state.provinceBoundaries) {
-          boundaryOutline = L.geoJSON(state.provinceBoundaries, { style: { color: '#23281f', weight: 0.7, opacity: 0.55, fill: false } }).addTo(map);
+          boundaryOutline = L.geoJSON(state.provinceBoundaries, {
+            style: { color: '#23281f', weight: 0.7, opacity: 0.55, fill: false },
+            onEachFeature: (feature, featureLayer) => {
+              const name = v.isTh ? feature.properties.th : feature.properties.en;
+              featureLayer.bindTooltip(name, { permanent: true, direction: 'center', className: 'province-label' });
+            }
+          }).addTo(map);
         } else {
           boundaryOutline = L.geoJSON(THAILAND_BOUNDARY, { style: { color: '#23281f', weight: 1.2, fill: false } }).addTo(map);
         }
