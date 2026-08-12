@@ -413,7 +413,7 @@
 
     const canRun = st.dataValidated && st.layers.some(l => l.raster) && selectedCount > 0;
     const runBtnLabel = st.running ? t.simulation.running : (st.modelRun ? t.simulation.runAgain : t.simulation.run);
-    const runBtnColor = st.running ? '#8a8f80' : '#4f7942';
+    const runBtnColor = st.running ? '#8a8f80' : 'linear-gradient(135deg, #4f7942, #1f7a8a)';
     const canRunNote = st.running ? t.simulation.notePipeline : (st.modelRun ? t.simulation.noteComplete : (canRun ? t.simulation.noteReady : t.simulation.noteBlocked));
 
     const contribBars = VARIABLE_CONTRIBUTION.map(v => ({ ...v, displayName: t.variables[v.name] || v.name, width: Math.round((v.pct / 40) * 100) }));
