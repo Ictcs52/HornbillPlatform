@@ -704,7 +704,7 @@
             <div class="layer-top">
               <input value="${esc(l.name)}" data-onchange="layerField" data-id="${l.id}" data-field="name">
               <div class="layer-status" style="color:${l.statusColor}">${esc(l.statusLabel)}</div>
-              <div class="layer-remove" data-action="removeLayer" data-id="${l.id}">×</div>
+              ${SHOW_UPLOADS ? `<div class="layer-remove" data-action="removeLayer" data-id="${l.id}">×</div>` : ''}
             </div>
             ${l.raster ? `
               <div class="raster-info">
