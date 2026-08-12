@@ -621,16 +621,25 @@
         </select>
       </div>
       <div class="field-row">
-        <div class="field-label-row"><div>${esc(t.climate.tempLabel)}</div><div>${v.settings.tempDelta >= 0 ? '+' : ''}${v.settings.tempDelta} °C</div></div>
-        <input type="range" min="-5" max="5" step="0.5" value="${v.settings.tempDelta}" data-onchange="setting" data-field="tempDelta">
+        <div class="field-label-row"><div>${esc(t.climate.tempLabel)}</div></div>
+        <div class="numeric-box">
+          <input type="number" step="0.5" min="-5" max="5" value="${v.settings.tempDelta}" data-onchange="setting" data-field="tempDelta" data-numeric="true">
+          <span class="numeric-box-unit">°C</span>
+        </div>
       </div>
       <div class="field-row">
-        <div class="field-label-row"><div>${esc(t.climate.rainfallLabel)}</div><div>${v.settings.rainfallDelta >= 0 ? '+' : ''}${v.settings.rainfallDelta} mm</div></div>
-        <input type="range" min="-1000" max="1000" step="50" value="${v.settings.rainfallDelta}" data-onchange="setting" data-field="rainfallDelta">
+        <div class="field-label-row"><div>${esc(t.climate.rainfallLabel)}</div></div>
+        <div class="numeric-box">
+          <input type="number" step="50" min="-1000" max="1000" value="${v.settings.rainfallDelta}" data-onchange="setting" data-field="rainfallDelta" data-numeric="true">
+          <span class="numeric-box-unit">mm</span>
+        </div>
       </div>
       <div class="field-row" style="margin-bottom:0">
-        <div class="field-label-row"><div>${esc(t.climate.dustLabel)}</div><div>${v.settings.dustDelta >= 0 ? '+' : ''}${v.settings.dustDelta} μg/m³</div></div>
-        <input type="range" min="-30" max="30" step="1" value="${v.settings.dustDelta}" data-onchange="setting" data-field="dustDelta">
+        <div class="field-label-row"><div>${esc(t.climate.dustLabel)}</div></div>
+        <div class="numeric-box">
+          <input type="number" step="1" min="-30" max="30" value="${v.settings.dustDelta}" data-onchange="setting" data-field="dustDelta" data-numeric="true">
+          <span class="numeric-box-unit">μg/m³</span>
+        </div>
       </div>
       ${v.modelRun ? `
         <div class="climate-stats" style="margin-top:14px">
