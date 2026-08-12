@@ -118,23 +118,54 @@ const TEMP_RAMP = [
 ];
 
 const RAINFALL_RAMP = [
-  { t: 0, r: 0xf5, g: 0xf0, b: 0xd9 },
-  { t: 0.3, r: 0xb8, g: 0xd9, b: 0x6a },
-  { t: 0.55, r: 0x4f, g: 0xa8, b: 0x8a },
-  { t: 0.75, r: 0x2f, g: 0x6f, b: 0xb8 },
-  { t: 1, r: 0x6b, g: 0x2f, b: 0xb8 }
+  { t: 0, r: 0xff, g: 0xff, b: 0xff },
+  { t: 0.05, r: 0xfd, g: 0xf8, b: 0xc9 },
+  { t: 0.15, r: 0xf0, g: 0xf1, b: 0x8a },
+  { t: 0.30, r: 0xc8, g: 0xe4, b: 0x6a },
+  { t: 0.45, r: 0x6d, g: 0xc3, b: 0x50 },
+  { t: 0.55, r: 0x2f, g: 0x9e, b: 0x55 },
+  { t: 0.65, r: 0x1a, g: 0x8a, b: 0x7a },
+  { t: 0.75, r: 0x20, g: 0x70, b: 0xb8 },
+  { t: 0.85, r: 0x5a, g: 0x4f, b: 0xc4 },
+  { t: 0.93, r: 0x7a, g: 0x2f, b: 0xb0 },
+  { t: 1, r: 0x4a, g: 0x0f, b: 0x52 }
 ];
 
 const RASTER_RAMPS = { rainfall: RAINFALL_RAMP, temperature: TEMP_RAMP };
 
 // Fixed classification breaks for the map legend and raster coloring, styled
-// after the TMD Climate Atlas legend (rainfall breaks match it exactly).
-// Using a fixed domain instead of each raster's own min/max keeps colors
-// comparable across datasets and matches the classed look of the source.
+// after the TMD Climate Atlas legend (rainfall breaks match it exactly; the
+// full 1degC-step scale for temperature). `breaks` drives the actual pixel
+// classification (fine steps make the raster shading look smooth);
+// `legendBreaks`, when present, is a coarser subset used only to keep the
+// on-map legend list a reasonable height — each shown row still gets its
+// color from the same classification as the raster, just at that value.
 const RASTER_CLASSES = {
   rainfall: { unit: 'mm.', breaks: [0, 0.1, 5, 10, 20, 35, 60, 90, 120, 150, 200, 300, 400, 600, 800, 1000, 1400, 1800, 2400, 3000, 4000] },
-  temperature: { unit: '°C', breaks: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44] }
+  temperature: {
+    unit: '°C',
+    breaks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44],
+    legendBreaks: [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 44]
+  }
 };
+
+// Classifies a value into one of `breaks.length - 1` bands (clamped at the
+// ends) and returns its rank position 0-1, so every band is evenly spaced
+// through the ramp regardless of how wide its value range is — matching a
+// classed/graduated legend rather than a smooth continuous gradient.
+function classifyRank(breaks, value) {
+  const lastBand = breaks.length - 2;
+  if (value <= breaks[0]) return 0;
+  if (value >= breaks[breaks.length - 1]) return lastBand;
+  for (let i = 1; i < breaks.length; i++) {
+    if (value < breaks[i]) return (i - 1) / lastBand;
+  }
+  return 1;
+}
+
+function classColor(ramp, breaks, value) {
+  return rampColor(ramp, classifyRank(breaks, value));
+}
 
 function rampColor(stops, t) {
   t = Math.max(0, Math.min(1, t));
@@ -158,19 +189,19 @@ function rampColor(stops, t) {
 // `boundary` is an optional GeoJSON Polygon/MultiPolygon geometry; pixels
 // falling outside it are made transparent, so the raster is clipped to a
 // real coastline instead of showing the full rectangular grid extent.
-// `domain`, if given, is a fixed [min, max] used instead of the raster's own
-// min/max, so colors line up with a fixed classed legend (see RASTER_CLASSES)
-// rather than being re-stretched to whatever this particular file contains.
-function renderRasterToDataUrl(raster, ramp, boundary, domain) {
-  const { width, height, band, nodata, bbox } = raster;
-  const [domMin, domMax] = domain || [raster.min, raster.max];
+// `breaks`, if given, classifies each pixel into a fixed set of bands (see
+// RASTER_CLASSES) instead of stretching colors across the raster's own
+// min/max — a classed/graduated look matching the reference legend, with
+// colors that stay comparable across different rasters.
+function renderRasterToDataUrl(raster, ramp, boundary, breaks) {
+  const { width, height, band, min, max, nodata, bbox } = raster;
   const [west, south, east, north] = bbox;
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d');
   const imgData = ctx.createImageData(width, height);
-  const range = (domMax - domMin) || 1;
+  const range = (max - min) || 1;
   for (let row = 0; row < height; row++) {
     const lat = north - (row + 0.5) / height * (north - south);
     for (let col = 0; col < width; col++) {
@@ -188,7 +219,7 @@ function renderRasterToDataUrl(raster, ramp, boundary, domain) {
           continue;
         }
       }
-      const [r, g, b] = rampColor(ramp, (v - domMin) / range);
+      const [r, g, b] = breaks ? classColor(ramp, breaks, v) : rampColor(ramp, (v - min) / range);
       imgData.data[o] = r;
       imgData.data[o + 1] = g;
       imgData.data[o + 2] = b;
@@ -199,8 +230,29 @@ function renderRasterToDataUrl(raster, ramp, boundary, domain) {
   return canvas.toDataURL();
 }
 
+// Cached per-ring bounding box, so a multi-part boundary (e.g. many small
+// islands) can reject a point cheaply before running the full ray-cast.
+const ringBboxCache = new WeakMap();
+function ringBbox(ring) {
+  let box = ringBboxCache.get(ring);
+  if (box) return box;
+  let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+  for (let i = 0; i < ring.length; i++) {
+    const lon = ring[i][0], lat = ring[i][1];
+    if (lon < minLon) minLon = lon;
+    if (lon > maxLon) maxLon = lon;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  }
+  box = [minLon, minLat, maxLon, maxLat];
+  ringBboxCache.set(ring, box);
+  return box;
+}
+
 // Ray-casting point-in-polygon test. `ring` is a GeoJSON linear ring: [[lon,lat], ...].
 function pointInRing(lat, lon, ring) {
+  const [minLon, minLat, maxLon, maxLat] = ringBbox(ring);
+  if (lon < minLon || lon > maxLon || lat < minLat || lat > maxLat) return false;
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const xi = ring[i][0], yi = ring[i][1];

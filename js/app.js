@@ -19,7 +19,8 @@
     unmatchedRasterFiles: [],
     leftCollapsed: false,
     rightCollapsed: false,
-    provinceBoundaries: null
+    provinceBoundaries: null,
+    thailandOutline: null
   };
 
   let runTimer = null;
@@ -169,8 +170,7 @@
     const ramp = RASTER_RAMPS[layerId];
     const classes = RASTER_CLASSES[layerId];
     if (ramp) {
-      const domain = classes ? [classes.breaks[0], classes.breaks[classes.breaks.length - 1]] : null;
-      raster.imgUrl = renderRasterToDataUrl(raster, ramp, THAILAND_BOUNDARY, domain);
+      raster.imgUrl = renderRasterToDataUrl(raster, ramp, state.thailandOutline || THAILAND_BOUNDARY, classes ? classes.breaks : null);
     }
     return raster;
   }
@@ -791,15 +791,15 @@
   function buildClassLegendHtml(layerId, isTh) {
     const ramp = RASTER_RAMPS[layerId];
     const cfg = RASTER_CLASSES[layerId];
-    const domainMin = cfg.breaks[0], domainMax = cfg.breaks[cfg.breaks.length - 1];
+    const displayBreaks = cfg.legendBreaks || cfg.breaks;
     const title = layerId === 'rainfall' ? (isTh ? 'ปริมาณฝน' : 'Rainfall') : (isTh ? 'อุณหภูมิ' : 'Temperature');
     let rows = '';
-    for (let i = cfg.breaks.length - 1; i >= 1; i--) {
-      const lo = cfg.breaks[i - 1], hi = cfg.breaks[i];
-      const [r, g, b] = rampColor(ramp, ((lo + hi) / 2 - domainMin) / (domainMax - domainMin));
+    for (let i = displayBreaks.length - 1; i >= 1; i--) {
+      const lo = displayBreaks[i - 1], hi = displayBreaks[i];
+      const [r, g, b] = classColor(ramp, cfg.breaks, (lo + hi) / 2);
       rows += `<div class="raster-legend-row" style="background:rgb(${r},${g},${b})"><span class="raster-legend-num">${hi}</span></div>`;
     }
-    rows += `<div class="raster-legend-row raster-legend-row-zero"><span class="raster-legend-num">${cfg.breaks[0]}</span></div>`;
+    rows += `<div class="raster-legend-row raster-legend-row-zero"><span class="raster-legend-num">${displayBreaks[0]}</span></div>`;
     return `<div class="raster-legend"><div class="raster-legend-title">${esc(title)} (${esc(cfg.unit)})</div><div class="raster-legend-list">${rows}</div></div>`;
   }
 
@@ -936,6 +936,22 @@
     fetch('./assets/thailand-provinces.geojson')
       .then(r => { if (!r.ok) throw new Error('Failed to load province boundaries'); return r.json(); })
       .then(geo => { state.provinceBoundaries = geo; render(); })
+      .catch(err => console.error(err));
+    // The precise national outline (derived from the same province data as
+    // the boundary lines above) replaces the coarse fallback used to clip
+    // raster pixels, so the colored area lines up with those lines instead
+    // of leaving a gap at the coastline. Re-clip any rasters that already
+    // loaded with the coarse fallback once this arrives.
+    fetch('./assets/thailand-outline.geojson')
+      .then(r => { if (!r.ok) throw new Error('Failed to load Thailand outline'); return r.json(); })
+      .then(geo => {
+        state.thailandOutline = geo;
+        state.layers = state.layers.map(l => {
+          if (l.raster && RASTER_RAMPS[l.id]) attachRasterImage(l.raster, l.id);
+          return l;
+        });
+        render();
+      })
       .catch(err => console.error(err));
   }
 
