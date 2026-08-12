@@ -600,7 +600,7 @@
     }
 
     let rasterTabInfo = null;
-    if (st.mapTab === 'rainfall' || st.mapTab === 'temperature') {
+    if (st.mapTab === 'rainfall' || st.mapTab === 'temperature' || st.mapTab === 'forest') {
       const layer = st.layers.find(l => l.id === st.mapTab);
       rasterTabInfo = { loaded: !!(layer && layer.raster && layer.raster.imgUrl) };
     }
@@ -826,7 +826,7 @@
 
   function renderMapChrome(v) {
     const t = v.t;
-    const rasterTab = v.mapTab === 'rainfall' || v.mapTab === 'temperature';
+    const rasterTab = v.mapTab === 'rainfall' || v.mapTab === 'temperature' || v.mapTab === 'forest';
 
     document.getElementById('mapPanelTitle').textContent = t.mapPanel.title;
     document.getElementById('mapTabDist').textContent = t.mapPanel.distribution;
@@ -835,7 +835,9 @@
     document.getElementById('mapTabRainfall').classList.toggle('active', v.mapTab === 'rainfall');
     document.getElementById('mapTabTemperature').textContent = t.mapPanel.temperatureMap;
     document.getElementById('mapTabTemperature').classList.toggle('active', v.mapTab === 'temperature');
-    document.getElementById('mapRealNote').textContent = rasterTab ? t.map.rasterNote : t.map.realNote;
+    document.getElementById('mapTabForest').textContent = t.mapPanel.forestMap;
+    document.getElementById('mapTabForest').classList.toggle('active', v.mapTab === 'forest');
+    document.getElementById('mapRealNote').textContent = v.mapTab === 'forest' ? t.map.forestNote : (rasterTab ? t.map.rasterNote : t.map.realNote);
 
     const noResultsBox = document.getElementById('noResultsBox');
     const rasterMissing = rasterTab && !v.rasterTabInfo.loaded;
@@ -910,7 +912,9 @@
     const ramp = RASTER_RAMPS[layerId];
     const cfg = RASTER_CLASSES[layerId];
     const displayBreaks = cfg.legendBreaks || cfg.breaks;
-    const title = layerId === 'rainfall' ? (isTh ? 'ปริมาณฝน' : 'Rainfall') : (isTh ? 'อุณหภูมิ' : 'Temperature');
+    const title = layerId === 'rainfall' ? (isTh ? 'ปริมาณฝน' : 'Rainfall')
+      : layerId === 'forest' ? (isTh ? 'พื้นที่ป่าไม้' : 'Forest Cover')
+      : (isTh ? 'อุณหภูมิ' : 'Temperature');
     let rows = '';
     for (let i = displayBreaks.length - 1; i >= 1; i--) {
       const lo = displayBreaks[i - 1], hi = displayBreaks[i];
@@ -954,7 +958,7 @@
     if (rasterOverlay) { map.removeLayer(rasterOverlay); rasterOverlay = null; }
     if (boundaryOutline) { map.removeLayer(boundaryOutline); boundaryOutline = null; }
 
-    const rasterTab = v.mapTab === 'rainfall' || v.mapTab === 'temperature';
+    const rasterTab = v.mapTab === 'rainfall' || v.mapTab === 'temperature' || v.mapTab === 'forest';
 
     if (rasterTab) {
       if (v.rasterTabInfo.loaded) {
@@ -1027,7 +1031,8 @@
 
   const DEFAULT_RASTERS = [
     { layerId: 'rainfall', url: './assets/rasters/rainfall_annual_tmd_1991-2020.tif', name: 'rainfall_annual_tmd_1991-2020.tif' },
-    { layerId: 'temperature', url: './assets/rasters/mean_temp_annual_tmd_1991-2020.tif', name: 'mean_temp_annual_tmd_1991-2020.tif' }
+    { layerId: 'temperature', url: './assets/rasters/mean_temp_annual_tmd_1991-2020.tif', name: 'mean_temp_annual_tmd_1991-2020.tif' },
+    { layerId: 'forest', url: './assets/rasters/forest_cover_2023_hansen.tif', name: 'forest_cover_2023_hansen.tif' }
   ];
 
   function loadDefaultRasters() {

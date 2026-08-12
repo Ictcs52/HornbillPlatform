@@ -208,7 +208,17 @@ const RAINFALL_RAMP = [
   { t: 1, r: 0x4a, g: 0x0f, b: 0x52 }
 ];
 
-const RASTER_RAMPS = { rainfall: RAINFALL_RAMP, temperature: TEMP_RAMP };
+// Pale (bare/cleared land, 0%) to deep forest green (dense canopy, 100%).
+const FOREST_RAMP = [
+  { t: 0, r: 0xf5, g: 0xf1, b: 0xe0 },
+  { t: 0.15, r: 0xe3, g: 0xe8, b: 0xb8 },
+  { t: 0.35, r: 0xb8, g: 0xd4, b: 0x7a },
+  { t: 0.55, r: 0x7a, g: 0xb8, b: 0x4a },
+  { t: 0.75, r: 0x3f, g: 0x8f, b: 0x3a },
+  { t: 1, r: 0x14, g: 0x4d, b: 0x1f }
+];
+
+const RASTER_RAMPS = { rainfall: RAINFALL_RAMP, temperature: TEMP_RAMP, forest: FOREST_RAMP };
 
 // Fixed classification breaks for the map legend and raster coloring, styled
 // after the TMD Climate Atlas legend (rainfall breaks match it exactly; the
@@ -223,7 +233,8 @@ const RASTER_CLASSES = {
     unit: '°C',
     breaks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44],
     legendBreaks: [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 44]
-  }
+  },
+  forest: { unit: '%', breaks: [0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100] }
 };
 
 // Classifies a value into one of `breaks.length - 1` bands (clamped at the
