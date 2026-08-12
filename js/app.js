@@ -98,7 +98,20 @@
       }
       groups.get(key).points.push([r.lat, r.lon]);
     });
-    return Array.from(groups.values()).map(g => ({ ...g, total: g.points.length }));
+    // Order matches the canonical SPECIES list (not upload row order, which
+    // varies by file and would otherwise reshuffle the list/colors on every
+    // upload); unmatched/custom species are appended after, in the order
+    // they first appeared.
+    const canonicalOrder = SPECIES.map(sp => sp.id);
+    const ordered = Array.from(groups.values()).sort((a, b) => {
+      const ia = canonicalOrder.indexOf(a.id);
+      const ib = canonicalOrder.indexOf(b.id);
+      if (ia === -1 && ib === -1) return 0;
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
+    });
+    return ordered.map(g => ({ ...g, total: g.points.length }));
   }
 
   function esc(s) {
