@@ -1,6 +1,7 @@
 const T = {
   en: {
     top: { title: 'Hornbill Habitat Model × GIS', subtitle: 'A prototype tool combining MaxEnt-style habitat modeling with an interactive vector map — all on one page. Loads real occurrence data and real climate rasters by default; upload your own environmental layers, then click Run.' },
+    footer: { text: 'Research prototype — not for operational conservation decisions. Occurrence data: GBIF. Climate data: TMD Climate Atlas.' },
     samples: { title: 'Samples', dropzone: 'Upload CSV (species,lon,lat), or click to upload', useSample: 'Use sample data' },
     occurrence: { validate: 'Validate Data', included: 'Included', excluded: 'Excluded' },
     envLayers: { title: 'Environmental Layers' },
@@ -26,6 +27,7 @@ const T = {
   },
   th: {
     top: { title: 'แบบจำลองถิ่นอาศัยนกเงือก × GIS', subtitle: 'ต้นแบบเครื่องมือที่รวมการสร้างแบบจำลองถิ่นอาศัยสไตล์ MaxEnt เข้ากับแผนที่ GIS แบบโต้ตอบในหน้าเดียว — มีข้อมูลจุดพบจริงและราสเตอร์ภูมิอากาศจริงให้พร้อมใช้ อัปโหลดชั้นข้อมูลสิ่งแวดล้อมของคุณเองแล้วกด Run' },
+    footer: { text: 'ต้นแบบงานวิจัย — ไม่ใช่สำหรับการตัดสินใจอนุรักษ์จริง ข้อมูลจุดพบ: GBIF ข้อมูลภูมิอากาศ: TMD Climate Atlas' },
     samples: { title: 'ข้อมูลจุดพบ (Samples)', dropzone: 'อัปโหลดไฟล์ CSV (species,lon,lat) หรือคลิกเพื่ออัปโหลด', useSample: 'ใช้ข้อมูลตัวอย่าง' },
     occurrence: { validate: 'ตรวจสอบข้อมูล', included: 'รวมอยู่', excluded: 'ไม่รวม' },
     envLayers: { title: 'ชั้นข้อมูลสิ่งแวดล้อม' },

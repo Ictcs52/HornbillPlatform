@@ -628,6 +628,7 @@
     document.getElementById('appSubtitle').textContent = v.t.top.subtitle;
     document.getElementById('langEnBtn').classList.toggle('active', v.langEnActive);
     document.getElementById('langThBtn').classList.toggle('active', v.langThActive);
+    document.getElementById('appFooter').textContent = v.t.footer.text;
   }
 
   function renderLeftCol(v) {
