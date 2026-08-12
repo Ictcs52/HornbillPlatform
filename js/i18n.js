@@ -20,7 +20,14 @@ const T = {
     exportScreen: { generate: 'Generate Report', formats: { pdf: { label: 'PDF Report' }, png: { label: 'PNG Map Images' }, geotiff: { label: 'GeoTIFF' }, csv: { label: 'CSV' } } },
     scenarioWord: { current: 'current', future: 'future' },
     map: { basemap: 'Basemap', realNote: 'Live OpenStreetMap basemap and real occurrence records from GBIF; the study-area outline is a hull computed directly from those records, not an official boundary.' },
-    variables: { 'Forest Patch Size': 'Forest Patch Size', 'NDVI (Vegetation Index)': 'NDVI (Vegetation Index)', 'Canopy Density': 'Canopy Density', 'Elevation': 'Elevation', 'Distance to Road': 'Distance to Road', 'Mean Annual Rainfall': 'Mean Annual Rainfall', 'Distance to River': 'Distance to River', 'Slope': 'Slope', 'Mean Temperature': 'Mean Temperature', 'Distance to Settlement': 'Distance to Settlement' }
+    variables: { 'Forest Patch Size': 'Forest Patch Size', 'NDVI (Vegetation Index)': 'NDVI (Vegetation Index)', 'Canopy Density': 'Canopy Density', 'Elevation': 'Elevation', 'Distance to Road': 'Distance to Road', 'Mean Annual Rainfall': 'Mean Annual Rainfall', 'Distance to River': 'Distance to River', 'Slope': 'Slope', 'Mean Temperature': 'Mean Temperature', 'Distance to Settlement': 'Distance to Settlement', 'Mean PM2.5 (Dust)': 'Mean PM2.5 (Dust)' },
+    climate: {
+      title: 'Future Climate Scenario', optimalTitle: 'Optimal conditions (current)',
+      projectTitle: 'Project to target year', yearLabel: 'Target year', projectedLabel: 'Projected value',
+      tempLabel: 'Temperature change', rainfallLabel: 'Rainfall change', dustLabel: 'Dust (PM2.5) change',
+      responseCurvesTitle: 'Response Curves (climate)', variableImportanceTitle: 'Variable Importance (climate)',
+      note: 'Illustrative — reuses the same fitted model with temp/rainfall/dust shifted by the deltas below.'
+    }
   },
   th: {
     top: { title: 'แบบจำลองถิ่นอาศัยนกเงือก × GIS', subtitle: 'ต้นแบบเครื่องมือที่รวมขั้นตอนแบบ MaxEnt (samples / environmental layers / settings / output) เข้ากับแผนที่ GIS แบบโต้ตอบในหน้าเดียว — มีข้อมูลตัวอย่างจริงให้พร้อมใช้ ลองเปลี่ยนการตั้งค่าแล้วกด Run ใหม่ หรืออัปโหลดไฟล์จริงแทนได้เลย' },
@@ -43,6 +50,13 @@ const T = {
     exportScreen: { generate: 'สร้างรายงาน', formats: { pdf: { label: 'รายงาน PDF' }, png: { label: 'รูปภาพแผนที่ PNG' }, geotiff: { label: 'GeoTIFF' }, csv: { label: 'CSV' } } },
     scenarioWord: { current: 'ปัจจุบัน', future: 'อนาคต' },
     map: { basemap: 'แผนที่ฐาน', realNote: 'แผนที่ฐาน OpenStreetMap จริง และข้อมูลจุดพบนกจริงจาก GBIF ส่วนเส้นขอบเขตพื้นที่ศึกษาคำนวณโดยตรงจากจุดข้อมูลเหล่านี้ ไม่ใช่ขอบเขตทางการ' },
-    variables: { 'Forest Patch Size': 'ขนาดผืนป่าต่อเนื่อง', 'NDVI (Vegetation Index)': 'ดัชนีพืชพรรณ (NDVI)', 'Canopy Density': 'ความหนาแน่นเรือนยอด', 'Elevation': 'ระดับความสูง', 'Distance to Road': 'ระยะห่างจากถนน', 'Mean Annual Rainfall': 'ปริมาณน้ำฝนเฉลี่ยรายปี', 'Distance to River': 'ระยะห่างจากแม่น้ำ', 'Slope': 'ความลาดชัน', 'Mean Temperature': 'อุณหภูมิเฉลี่ย', 'Distance to Settlement': 'ระยะห่างจากชุมชน' }
+    variables: { 'Forest Patch Size': 'ขนาดผืนป่าต่อเนื่อง', 'NDVI (Vegetation Index)': 'ดัชนีพืชพรรณ (NDVI)', 'Canopy Density': 'ความหนาแน่นเรือนยอด', 'Elevation': 'ระดับความสูง', 'Distance to Road': 'ระยะห่างจากถนน', 'Mean Annual Rainfall': 'ปริมาณน้ำฝนเฉลี่ยรายปี', 'Distance to River': 'ระยะห่างจากแม่น้ำ', 'Slope': 'ความลาดชัน', 'Mean Temperature': 'อุณหภูมิเฉลี่ย', 'Distance to Settlement': 'ระยะห่างจากชุมชน', 'Mean PM2.5 (Dust)': 'ฝุ่น PM2.5 เฉลี่ย' },
+    climate: {
+      title: 'จำลองสถานการณ์อนาคต', optimalTitle: 'ค่าที่เหมาะสมที่สุด (ปัจจุบัน)',
+      projectTitle: 'คาดการณ์ถึงปีเป้าหมาย', yearLabel: 'ปีเป้าหมาย', projectedLabel: 'ค่าที่คาดการณ์',
+      tempLabel: 'อุณหภูมิเปลี่ยนแปลง', rainfallLabel: 'ปริมาณฝนเปลี่ยนแปลง', dustLabel: 'ฝุ่น (PM2.5) เปลี่ยนแปลง',
+      responseCurvesTitle: 'กราฟความสัมพันธ์ (ภูมิอากาศ)', variableImportanceTitle: 'อิทธิพลของตัวแปร (ภูมิอากาศ)',
+      note: 'เป็นภาพประกอบ — ใช้โมเดลเดิมที่ฟิตไว้แล้ว แทนค่า Temp/ฝน/ฝุ่นด้วยค่าที่เปลี่ยนไปตามด้านล่าง'
+    }
   }
 };
