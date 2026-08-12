@@ -330,6 +330,26 @@
     return pts[pts.length - 1].y;
   }
 
+  // RESPONSE_CURVES ids ('temp') don't match ENV_LAYERS ids ('temperature');
+  // this maps a curve id to the layer it should sample from.
+  const LAYER_ID_BY_CURVE_ID = { temp: 'temperature', rainfall: 'rainfall', dust: 'dust' };
+
+  // Median of the raster's value at each occurrence point — the real,
+  // observed "optimal" condition for the species at the points where it's
+  // actually been recorded, rather than reading a value off the illustrative
+  // response curve shape.
+  function medianRasterValueAtPoints(raster, points) {
+    const vals = [];
+    points.forEach(([lat, lon]) => {
+      const v = sampleRasterAt(raster, lat, lon);
+      if (v !== null) vals.push(v);
+    });
+    if (!vals.length) return null;
+    vals.sort((a, b) => a - b);
+    const mid = Math.floor(vals.length / 2);
+    return vals.length % 2 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2;
+  }
+
   function computeVals() {
     const st = state;
     const t = T[st.lang];
@@ -426,8 +446,11 @@
 
     const deltaByVarId = { temp: st.settings.tempDelta, rainfall: st.settings.rainfallDelta, dust: st.settings.dustDelta };
     const responseCurves = RESPONSE_CURVES.map(c => {
+      const layer = st.layers.find(l => l.id === (LAYER_ID_BY_CURVE_ID[c.id] || c.id));
+      const observedMedian = layer && layer.raster ? medianRasterValueAtPoints(layer.raster, allOccurrencePoints) : null;
       const peakPt = c.points.reduce((best, p) => p.y > best.y ? p : best, c.points[0]);
-      const optimalValue = c.min + peakPt.x * (c.max - c.min);
+      const curveOptimal = c.min + peakPt.x * (c.max - c.min);
+      const optimalValue = observedMedian !== null ? observedMedian : curveOptimal;
       const delta = deltaByVarId[c.id] || 0;
       const projectedValue = Math.min(c.max, Math.max(c.min, optimalValue + delta));
       const decimals = c.id === 'rainfall' ? 0 : 1;
@@ -448,7 +471,7 @@
     function pointRisk(lat, lon) {
       let weightedDrop = 0, weightSum = 0;
       RESPONSE_CURVES.forEach(c => {
-        const layer = st.layers.find(l => l.id === c.id);
+        const layer = st.layers.find(l => l.id === (LAYER_ID_BY_CURVE_ID[c.id] || c.id));
         if (!layer || !layer.raster) return;
         const v = sampleRasterAt(layer.raster, lat, lon);
         if (v === null) return;
