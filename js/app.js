@@ -42,7 +42,11 @@
   // that have a defined color ramp, so it can be shown as a map overlay.
   function attachRasterImage(raster, layerId) {
     const ramp = RASTER_RAMPS[layerId];
-    if (ramp) raster.imgUrl = renderRasterToDataUrl(raster, ramp, THAILAND_BOUNDARY);
+    const classes = RASTER_CLASSES[layerId];
+    if (ramp) {
+      const domain = classes ? [classes.breaks[0], classes.breaks[classes.breaks.length - 1]] : null;
+      raster.imgUrl = renderRasterToDataUrl(raster, ramp, THAILAND_BOUNDARY, domain);
+    }
     return raster;
   }
 
@@ -326,15 +330,7 @@
     let rasterTabInfo = null;
     if (st.mapTab === 'rainfall' || st.mapTab === 'temperature') {
       const layer = st.layers.find(l => l.id === st.mapTab);
-      const unit = st.mapTab === 'rainfall' ? ' mm' : ' °C';
-      const decimals = st.mapTab === 'rainfall' ? 0 : 1;
-      const loaded = !!(layer && layer.raster && layer.raster.imgUrl);
-      rasterTabInfo = {
-        loaded,
-        minLabel: loaded ? layer.raster.min.toFixed(decimals) + unit : '',
-        maxLabel: loaded ? layer.raster.max.toFixed(decimals) + unit : '',
-        gradientCss: rampCss(RASTER_RAMPS[st.mapTab])
-      };
+      rasterTabInfo = { loaded: !!(layer && layer.raster && layer.raster.imgUrl) };
     }
 
     return {
@@ -469,7 +465,15 @@
             <div class="climate-stat-row"><div class="climate-stat-label">${esc(t.climate.projectedLabel)}: ${esc(cv.displayName)}</div><div class="climate-stat-value">${cv.projectedFmt} ${esc(cv.unit)}</div></div>`).join('')}
         </div>` : ''}
       <div class="climate-note">${esc(t.climate.note)}</div>
+      <div class="run-btn run-btn-secondary" style="background:${v.runBtnColor}" data-action="runModel">▶ ${esc(v.runBtnLabel)}</div>
     </div>`;
+
+    document.getElementById('colRightContent').innerHTML = html;
+  }
+
+  function renderMapExtra(v) {
+    const t = v.t;
+    let html = '';
 
     html += `<div class="card">
       <div class="results-head">
@@ -501,7 +505,7 @@
         </div>`).join('') : `<div class="results-summary">${esc(t.results.noResults)}</div>`}
     </div>`;
 
-    document.getElementById('colRightContent').innerHTML = html;
+    document.getElementById('colMapExtra').innerHTML = html;
   }
 
   function renderMapChrome(v) {
@@ -546,12 +550,11 @@
       riskNoteEl.innerHTML = `${esc(v.t.risk.highArea)} <b style="color:#c1573a">${v.highRiskPct}%</b> ${esc(v.t.risk.ofArea)}`;
       speciesLegendEl.innerHTML = '';
     } else if (rasterTab && v.rasterTabInfo.loaded) {
-      gradientEl.style.display = 'block';
-      gradientEl.style.background = v.rasterTabInfo.gradientCss;
-      scaleLabelsEl.style.display = 'flex';
-      scaleLabelsEl.innerHTML = `<div>${esc(v.rasterTabInfo.minLabel)}</div><div>${esc(v.rasterTabInfo.maxLabel)}</div>`;
+      gradientEl.style.display = 'none';
+      scaleLabelsEl.style.display = 'none';
       riskNoteEl.style.display = 'none';
-      speciesLegendEl.innerHTML = '';
+      speciesLegendEl.innerHTML = v.legendSpecies.map(l => `
+        <div class="legend-item"><div class="legend-dot" style="background:${l.color}"></div>${esc(l.displayName)}</div>`).join('');
     } else {
       gradientEl.style.display = 'none';
       scaleLabelsEl.style.display = 'none';
@@ -593,6 +596,44 @@
     return '#c1573a';
   }
 
+  // On-map classed legend (Leaflet control), styled after the TMD Climate
+  // Atlas legend: stacked color bands with the class boundary value at each
+  // band's top edge, high value at top down to zero at the bottom.
+  let classLegendControl = null;
+
+  function buildClassLegendHtml(layerId, isTh) {
+    const ramp = RASTER_RAMPS[layerId];
+    const cfg = RASTER_CLASSES[layerId];
+    const domainMin = cfg.breaks[0], domainMax = cfg.breaks[cfg.breaks.length - 1];
+    const title = layerId === 'rainfall' ? (isTh ? 'ปริมาณฝน' : 'Rainfall') : (isTh ? 'อุณหภูมิ' : 'Temperature');
+    let rows = '';
+    for (let i = cfg.breaks.length - 1; i >= 1; i--) {
+      const lo = cfg.breaks[i - 1], hi = cfg.breaks[i];
+      const [r, g, b] = rampColor(ramp, ((lo + hi) / 2 - domainMin) / (domainMax - domainMin));
+      rows += `<div class="raster-legend-row" style="background:rgb(${r},${g},${b})"><span class="raster-legend-num">${hi}</span></div>`;
+    }
+    rows += `<div class="raster-legend-row raster-legend-row-zero"><span class="raster-legend-num">${cfg.breaks[0]}</span></div>`;
+    return `<div class="raster-legend"><div class="raster-legend-title">${esc(title)} (${esc(cfg.unit)})</div><div class="raster-legend-list">${rows}</div></div>`;
+  }
+
+  function updateClassLegend(layerId, isTh) {
+    if (!classLegendControl) {
+      classLegendControl = L.control({ position: 'bottomright' });
+      classLegendControl.onAdd = function () {
+        const div = L.DomUtil.create('div', 'raster-legend-control');
+        L.DomEvent.disableClickPropagation(div);
+        L.DomEvent.disableScrollPropagation(div);
+        return div;
+      };
+      classLegendControl.addTo(map);
+    }
+    classLegendControl.getContainer().innerHTML = buildClassLegendHtml(layerId, isTh);
+  }
+
+  function removeClassLegend() {
+    if (classLegendControl) { map.removeControl(classLegendControl); classLegendControl = null; }
+  }
+
   function updateLeafletLayers(v) {
     if (!map) return;
     pointsLayer.clearLayers();
@@ -619,9 +660,18 @@
         } else {
           boundaryOutline = L.geoJSON(THAILAND_BOUNDARY, { style: { color: '#23281f', weight: 1.2, fill: false } }).addTo(map);
         }
+        updateClassLegend(v.mapTab, v.isTh);
+      } else {
+        removeClassLegend();
       }
+      v.visiblePoints.forEach(pt => {
+        L.circleMarker(pt.latlng, {
+          radius: 3, color: '#ffffff', weight: 1, fillColor: pt.color, fillOpacity: 0.9
+        }).bindPopup(esc(pt.species)).addTo(pointsLayer);
+      });
       return;
     }
+    removeClassLegend();
 
     if (v.showCompare && v.notRun) return;
 
@@ -659,6 +709,7 @@
     renderTop(v);
     renderLeftCol(v);
     renderRightCol(v);
+    renderMapExtra(v);
     renderMapChrome(v);
     renderCollapse();
     updateLeafletLayers(v);

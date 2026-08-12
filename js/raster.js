@@ -123,6 +123,15 @@ const RAINFALL_RAMP = [
 
 const RASTER_RAMPS = { rainfall: RAINFALL_RAMP, temperature: TEMP_RAMP };
 
+// Fixed classification breaks for the map legend and raster coloring, styled
+// after the TMD Climate Atlas legend (rainfall breaks match it exactly).
+// Using a fixed domain instead of each raster's own min/max keeps colors
+// comparable across datasets and matches the classed look of the source.
+const RASTER_CLASSES = {
+  rainfall: { unit: 'mm.', breaks: [0, 0.1, 5, 10, 20, 35, 60, 90, 120, 150, 200, 300, 400, 600, 800, 1000, 1400, 1800, 2400, 3000, 4000] },
+  temperature: { unit: '°C', breaks: [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32] }
+};
+
 function rampColor(stops, t) {
   t = Math.max(0, Math.min(1, t));
   for (let i = 1; i < stops.length; i++) {
@@ -140,24 +149,24 @@ function rampColor(stops, t) {
   return [last.r, last.g, last.b];
 }
 
-function rampCss(stops) {
-  return 'linear-gradient(to right,' + stops.map(s => `rgb(${s.r},${s.g},${s.b}) ${Math.round(s.t * 100)}%`).join(',') + ')';
-}
-
 // Rasterizes a parsed GeoTIFF band into a colored PNG data URL for use as a
 // Leaflet image overlay — entirely client-side, no server round trip.
 // `boundary` is an optional GeoJSON Polygon/MultiPolygon geometry; pixels
 // falling outside it are made transparent, so the raster is clipped to a
 // real coastline instead of showing the full rectangular grid extent.
-function renderRasterToDataUrl(raster, ramp, boundary) {
-  const { width, height, band, min, max, nodata, bbox } = raster;
+// `domain`, if given, is a fixed [min, max] used instead of the raster's own
+// min/max, so colors line up with a fixed classed legend (see RASTER_CLASSES)
+// rather than being re-stretched to whatever this particular file contains.
+function renderRasterToDataUrl(raster, ramp, boundary, domain) {
+  const { width, height, band, nodata, bbox } = raster;
+  const [domMin, domMax] = domain || [raster.min, raster.max];
   const [west, south, east, north] = bbox;
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d');
   const imgData = ctx.createImageData(width, height);
-  const range = (max - min) || 1;
+  const range = (domMax - domMin) || 1;
   for (let row = 0; row < height; row++) {
     const lat = north - (row + 0.5) / height * (north - south);
     for (let col = 0; col < width; col++) {
@@ -175,7 +184,7 @@ function renderRasterToDataUrl(raster, ramp, boundary) {
           continue;
         }
       }
-      const [r, g, b] = rampColor(ramp, (v - min) / range);
+      const [r, g, b] = rampColor(ramp, (v - domMin) / range);
       imgData.data[o] = r;
       imgData.data[o + 1] = g;
       imgData.data[o + 2] = b;
