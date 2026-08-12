@@ -644,6 +644,8 @@
     document.getElementById('appFooter').textContent = v.t.footer.text;
   }
 
+  const SHOW_UPLOADS = false; // file-upload dropzones (samples/raster/station) temporarily hidden
+
   function renderLeftCol(v) {
     const t = v.t;
     let html = '';
@@ -656,8 +658,9 @@
           <div class="species-name">${esc(sp.displayName)}</div>
           <div class="species-total">${sp.totalFmt}</div>
         </div>`).join('')}
+      ${SHOW_UPLOADS ? `
       <label for="csvUpload" class="dropzone"><div class="dropzone-label">${esc(t.samples.dropzone)}</div></label>
-      <input id="csvUpload" type="file" accept=".csv,.txt" multiple style="display:none" data-onchange="fileUpload">
+      <input id="csvUpload" type="file" accept=".csv,.txt" multiple style="display:none" data-onchange="fileUpload">` : ''}
       ${v.uploads.map(u => `
         <div class="upload-row"><div class="upload-name">${esc(u.name)}</div><div class="upload-status" style="color:${u.color}">${esc(u.statusLabel)}</div></div>`).join('')}
       <div class="btn-row">
@@ -672,10 +675,11 @@
 
       <div class="raster-summary">${v.layersSummary.loadedCount}/${v.layersSummary.totalCount} ${esc(t.layers.loadedLabel)}${v.layersSummary.hasMultiple ? '  •  ' + esc(t.layers.resolution) + ' ' + (v.layersSummary.resMatch ? '✓' : '✗ ' + esc(t.layers.mismatch)) + '  •  CRS ' + (v.layersSummary.crsMatch ? '✓' : '✗ ' + esc(t.layers.mismatch)) : ''}</div>
 
+      ${SHOW_UPLOADS ? `
       <label for="rasterUpload" id="rasterDropzone" class="dropzone raster-dropzone">
         <div class="dropzone-label">${esc(t.layers.rasterDropzone)}</div>
       </label>
-      <input id="rasterUpload" type="file" accept=".tif,.tiff" multiple style="display:none" data-onchange="rasterUpload">
+      <input id="rasterUpload" type="file" accept=".tif,.tiff" multiple style="display:none" data-onchange="rasterUpload">` : ''}
 
       ${v.unmatchedFiles.length ? `
       <div class="unmatched-files">
@@ -717,6 +721,7 @@
                 <input class="res-unit" value="${esc(l.resUnit)}" data-onchange="layerResolution" data-id="${l.id}">
                 <input class="res-source" value="${esc(l.source)}" data-onchange="layerField" data-id="${l.id}" data-field="source">
               </div>
+              ${SHOW_UPLOADS ? `
               <div class="station-upload">
                 <label class="dropzone station-dropzone" for="stationUpload_${l.id}">
                   <div class="dropzone-label">${esc(t.layers.stationDropzone)}</div>
@@ -727,7 +732,12 @@
                   ${l.hasDefaultSample ? `<div class="btn btn-tan" data-action="useSampleRaster" data-id="${l.id}">${esc(t.samples.useSample)}</div>` : ''}
                   <div class="btn btn-green" data-action="validateStationData" data-id="${l.id}">${esc(t.occurrence.validate)}</div>
                 </div>
-              </div>`}
+              </div>` : (l.hasDefaultSample ? `
+              <div class="station-upload">
+                <div class="btn-row">
+                  <div class="btn btn-tan" data-action="useSampleRaster" data-id="${l.id}">${esc(t.samples.useSample)}</div>
+                </div>
+              </div>` : '')}`}
           </div>`).join('')}
       `).join('')}
     </div>`;
