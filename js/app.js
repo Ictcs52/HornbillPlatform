@@ -4,12 +4,18 @@
   const state = {
     lang: 'en',
     mapTab: 'distribution',
+    speciesSel: { great: true, wreathed: true, rufous: true, rhino: true, helmeted: true },
     layers: ENV_LAYERS.map(l => ({ ...l })),
     settings: { targetYear: 2035, tempDelta: 0, rainfallDelta: 0, dustDelta: 0 },
+    dataValidated: false,
     running: false,
     runProgress: 0,
     modelRun: false,
     log: [],
+    uploads: [],
+    dataSource: 'sample', // 'sample' | 'upload'
+    uploadedRows: [],
+    uploadedSpecies: null,
     unmatchedRasterFiles: [],
     leftCollapsed: false,
     rightCollapsed: false,
@@ -18,6 +24,82 @@
 
   let runTimer = null;
 
+  const UPLOAD_PALETTE = ['#1f9e4a', '#d9a319', '#e8552a', '#1f9bd9', '#bb32c4', '#4f7942', '#a85a34', '#3d6a8a', '#8a7c3f', '#b5652f'];
+
+  function matchKnownSpecies(name) {
+    const n = name.trim().toLowerCase();
+    return SPECIES.find(sp => sp.id.toLowerCase() === n || sp.common.toLowerCase() === n
+      || (sp.latin && sp.latin.toLowerCase() === n) || sp.thai === name.trim());
+  }
+
+  const SPECIES_COLS = ['species', 'name', 'scientificname', 'verbatimscientificname'];
+  const LON_COLS = ['lon', 'lng', 'longitude', 'decimallongitude'];
+  const LAT_COLS = ['lat', 'latitude', 'decimallatitude'];
+
+  // Parses occurrence text into {species, lon, lat} rows. Supports plain
+  // "species,lon,lat" CSV as well as GBIF occurrence downloads, whose "CSV"
+  // export is actually tab-delimited Darwin Core (columns like species,
+  // decimalLatitude, decimalLongitude among many others).
+  function parseCsvText(text) {
+    const lines = String(text || '').split(/\r\n|\n|\r/).map(l => l.replace(/\r$/, '')).filter(l => l.trim().length);
+    if (!lines.length) return { rows: [], errorCount: 0 };
+
+    const commaCount = (lines[0].match(/,/g) || []).length;
+    const tabCount = (lines[0].match(/\t/g) || []).length;
+    const delim = tabCount > commaCount ? '\t' : ',';
+    const split = line => line.split(delim).map(c => c.trim().replace(/^"|"$/g, ''));
+
+    let startIdx = 0;
+    let idx = { species: 0, lon: 1, lat: 2 };
+    const headerCells = split(lines[0]).map(c => c.toLowerCase());
+    const looksLikeHeader = headerCells.some(c => SPECIES_COLS.includes(c) || LON_COLS.includes(c) || LAT_COLS.includes(c));
+    if (looksLikeHeader) {
+      startIdx = 1;
+      const idxOf = names => headerCells.findIndex(c => names.includes(c));
+      const sIdx = idxOf(SPECIES_COLS);
+      const loIdx = idxOf(LON_COLS);
+      const laIdx = idxOf(LAT_COLS);
+      if (sIdx >= 0) idx.species = sIdx;
+      if (loIdx >= 0) idx.lon = loIdx;
+      if (laIdx >= 0) idx.lat = laIdx;
+    }
+
+    const rows = [];
+    let errorCount = 0;
+    for (let i = startIdx; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      const cells = split(lines[i]);
+      const species = cells[idx.species];
+      const lon = parseFloat(cells[idx.lon]);
+      const lat = parseFloat(cells[idx.lat]);
+      if (!species || !isFinite(lon) || !isFinite(lat) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+        errorCount++;
+        continue;
+      }
+      rows.push({ species, lon, lat });
+    }
+    return { rows, errorCount };
+  }
+
+  function buildUploadedSpecies(rows) {
+    const groups = new Map();
+    rows.forEach(r => {
+      const known = matchKnownSpecies(r.species);
+      const key = known ? known.id : 'custom_' + r.species.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      if (!groups.has(key)) {
+        groups.set(key, {
+          id: key,
+          common: known ? known.common : r.species.trim(),
+          thai: known ? known.thai : r.species.trim(),
+          color: known ? known.color : UPLOAD_PALETTE[groups.size % UPLOAD_PALETTE.length],
+          points: []
+        });
+      }
+      groups.get(key).points.push([r.lat, r.lon]);
+    });
+    return Array.from(groups.values()).map(g => ({ ...g, total: g.points.length }));
+  }
+
   function esc(s) {
     return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
@@ -25,6 +107,49 @@
   function updateSetting(key, val) { state.settings[key] = val; render(); }
   function setLang(l) { state.lang = l; render(); }
   function setMapTab(tab) { state.mapTab = tab; render(); }
+  function toggleSpecies(id) { state.speciesSel[id] = !state.speciesSel[id]; render(); }
+  function validateData() { state.dataValidated = true; render(); }
+  function useSampleData() {
+    state.dataSource = 'sample';
+    state.uploadedRows = [];
+    state.uploadedSpecies = null;
+    state.speciesSel = { great: true, wreathed: true, rufous: true, rhino: true, helmeted: true };
+    state.dataValidated = true;
+    render();
+  }
+
+  function onFileUpload(e) {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const entries = files.map(f => ({ name: f.name, sizeKB: Math.max(1, Math.round(f.size / 1024)), status: 'processing' }));
+    state.uploads = [...state.uploads, ...entries];
+    render();
+
+    files.forEach((file, i) => {
+      const entryName = entries[i].name;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const { rows, errorCount } = parseCsvText(reader.result);
+        if (rows.length) {
+          state.uploadedRows = [...state.uploadedRows, ...rows];
+          state.uploadedSpecies = buildUploadedSpecies(state.uploadedRows);
+          state.speciesSel = Object.fromEntries(state.uploadedSpecies.map(sp => [sp.id, true]));
+          state.dataSource = 'upload';
+          state.dataValidated = false;
+        }
+        state.uploads = state.uploads.map(u => u.name === entryName
+          ? { ...u, status: rows.length ? 'ready' : 'error', pointCount: rows.length, errorCount }
+          : u);
+        render();
+      };
+      reader.onerror = () => {
+        state.uploads = state.uploads.map(u => u.name === entryName ? { ...u, status: 'error' } : u);
+        render();
+      };
+      reader.readAsText(file);
+    });
+    e.target.value = '';
+  }
   function toggleLeftPanel() { state.leftCollapsed = !state.leftCollapsed; render(); }
   function toggleRightPanel() { state.rightCollapsed = !state.rightCollapsed; render(); }
   function updateLayerField(id, field, value) {
@@ -133,7 +258,8 @@
   }
 
   const ACTIONS = {
-    setLang, setMapTab, removeLayer, removeRasterFromLayer,
+    setLang, setMapTab, toggleSpecies, validateData, useSampleData,
+    removeLayer, removeRasterFromLayer,
     addLayer, runModel, toggleMapFullscreen,
     dismissUnmatchedFile, toggleLeftPanel, toggleRightPanel
   };
@@ -161,6 +287,8 @@
       const field = el.getAttribute('data-field');
       const numeric = el.getAttribute('data-numeric') === 'true';
       updateSetting(field, numeric ? Number(el.value) : el.value);
+    } else if (onchange === 'fileUpload') {
+      onFileUpload(e);
     } else if (onchange === 'rasterUpload') {
       handleRasterFiles(el.files);
       el.value = '';
@@ -207,15 +335,25 @@
     const t = T[st.lang];
     const isTh = st.lang === 'th';
 
+    const usingUpload = st.dataSource === 'upload' && st.uploadedSpecies;
+    const activeSpecies = usingUpload ? st.uploadedSpecies : SPECIES;
+    const selectedSpecies = activeSpecies.filter(sp => st.speciesSel[sp.id]);
+    const selectedCount = selectedSpecies.length;
+
     // Points stored as real [lat, lon] pairs, plotted directly, no transform.
     const visiblePoints = [];
-    SPECIES.forEach(sp => sp.points.forEach((latlng) => {
+    selectedSpecies.forEach(sp => sp.points.forEach((latlng) => {
       visiblePoints.push({ latlng, color: sp.color, species: isTh ? sp.thai : sp.common });
     }));
 
-    const legendSpecies = SPECIES.map(sp => ({ displayName: isTh ? sp.thai : sp.common, color: sp.color }));
+    const speciesCards = activeSpecies.map(sp => ({
+      ...sp, displayName: isTh ? sp.thai : sp.common, totalFmt: sp.total.toLocaleString(),
+      border: st.speciesSel[sp.id] ? sp.color : '#e6e1d2', op: st.speciesSel[sp.id] ? '1' : '0.5'
+    }));
 
-    const allOccurrencePoints = SPECIES.flatMap(sp => sp.points);
+    const legendSpecies = selectedSpecies.map(sp => ({ displayName: isTh ? sp.thai : sp.common, color: sp.color }));
+
+    const allOccurrencePoints = activeSpecies.flatMap(sp => sp.points);
     const loadedLayers = st.layers.filter(l => l.raster);
     let resMatch = true, crsMatch = true;
     if (loadedLayers.length > 1) {
@@ -270,7 +408,10 @@
         : (isTh ? 'กำลังอ่านไฟล์…' : 'Reading file…')
     }));
 
-    const canRun = st.layers.some(l => l.raster);
+    const validRecordsFmt = selectedSpecies.reduce((sum, sp) => sum + sp.total, 0).toLocaleString();
+    const validNote = '✓ ' + validRecordsFmt + (isTh ? ' ระเบียนที่ผ่านการตรวจสอบจาก ' + selectedCount + ' ชนิด' : ' valid records across ' + selectedCount + ' species');
+
+    const canRun = st.dataValidated && st.layers.some(l => l.raster) && selectedCount > 0;
     const runBtnLabel = st.running ? t.simulation.running : (st.modelRun ? t.simulation.runAgain : t.simulation.run);
     const runBtnColor = st.running ? '#8a8f80' : '#4f7942';
     const canRunNote = st.running ? t.simulation.notePipeline : (st.modelRun ? t.simulation.noteComplete : (canRun ? t.simulation.noteReady : t.simulation.noteBlocked));
@@ -333,15 +474,31 @@
       rasterTabInfo = { loaded: !!(layer && layer.raster && layer.raster.imgUrl) };
     }
 
+    const uploads = st.uploads.map(u => {
+      let statusLabel;
+      let color;
+      if (u.status === 'ready') {
+        statusLabel = t.occurrence.included + ' (' + (u.pointCount || 0).toLocaleString() + (isTh ? ' จุด' : ' pts') + (u.errorCount ? ', ' + u.errorCount + (isTh ? ' แถวข้าม' : ' skipped') : '') + ')';
+        color = '#4f7942';
+      } else if (u.status === 'error') {
+        statusLabel = isTh ? 'อ่านไฟล์ไม่ได้ / รูปแบบไม่ถูกต้อง' : 'Unreadable / invalid format';
+        color = '#c1573a';
+      } else {
+        statusLabel = isTh ? 'กำลังประมวลผล…' : 'Processing…';
+        color = '#b5652f';
+      }
+      return { ...u, statusLabel, color };
+    });
+
     return {
       t, isTh,
       langEnActive: st.lang === 'en', langThActive: st.lang === 'th',
-      legendSpecies, layerGroups, layersSummary, unmatchedFiles,
+      speciesCards, legendSpecies, layerGroups, layersSummary, unmatchedFiles,
       layerAssignOptions: st.layers.map(l => ({ id: l.id, displayName: l.name })),
+      uploads, dataValidated: st.dataValidated, validNote,
       settings: st.settings,
       runBtnColor, runBtnLabel, canRunNote, running: st.running, runProgress: st.runProgress,
       lastLogLines: st.log.slice(-3),
-      showDistribution: st.mapTab === 'distribution', showCompare: st.mapTab === 'compare',
       mapTab: st.mapTab, rasterTabInfo,
       visiblePoints, modelRun: st.modelRun, notRun: !st.modelRun, highRiskPct,
       contribBars, responseCurves, pointRisk
@@ -359,8 +516,27 @@
     const t = v.t;
     let html = '';
 
+    html += `<div class="card accent-green">
+      <div class="panel-head"><div class="badge badge-green">01</div><div class="panel-title">${esc(t.samples.title)}</div></div>
+      ${v.speciesCards.map(sp => `
+        <div class="species-row" style="border-color:${sp.border};opacity:${sp.op}" data-action="toggleSpecies" data-id="${sp.id}">
+          <div class="species-dot" style="background:${sp.color}"></div>
+          <div class="species-name">${esc(sp.displayName)}</div>
+          <div class="species-total">${sp.totalFmt}</div>
+        </div>`).join('')}
+      <label for="csvUpload" class="dropzone"><div class="dropzone-label">${esc(t.samples.dropzone)}</div></label>
+      <input id="csvUpload" type="file" accept=".csv,.txt" multiple style="display:none" data-onchange="fileUpload">
+      ${v.uploads.map(u => `
+        <div class="upload-row"><div class="upload-name">${esc(u.name)}</div><div class="upload-status" style="color:${u.color}">${esc(u.statusLabel)}</div></div>`).join('')}
+      <div class="btn-row">
+        <div class="btn btn-tan" data-action="useSampleData">${esc(t.samples.useSample)}</div>
+        <div class="btn btn-green" data-action="validateData">${esc(t.occurrence.validate)}</div>
+      </div>
+      ${v.dataValidated ? `<div class="valid-note">${esc(v.validNote)}</div>` : ''}
+    </div>`;
+
     html += `<div class="card accent-brown">
-      <div class="panel-head"><div class="badge badge-brown">01</div><div class="panel-title">${esc(t.envLayers.title)}</div></div>
+      <div class="panel-head"><div class="badge badge-brown">02</div><div class="panel-title">${esc(t.envLayers.title)}</div></div>
 
       <div class="raster-summary">${v.layersSummary.loadedCount}/${v.layersSummary.totalCount} ${esc(t.layers.loadedLabel)}${v.layersSummary.hasMultiple ? '  •  ' + esc(t.layers.resolution) + ' ' + (v.layersSummary.resMatch ? '✓' : '✗ ' + esc(t.layers.mismatch)) + '  •  CRS ' + (v.layersSummary.crsMatch ? '✓' : '✗ ' + esc(t.layers.mismatch)) : ''}</div>
 
@@ -412,34 +588,8 @@
       `).join('')}
     </div>`;
 
-    html += `<div class="run-btn" style="background:${v.runBtnColor}" data-action="runModel">▶ ${esc(v.runBtnLabel)}</div>
-      <div class="run-note">${esc(v.canRunNote)}</div>
-      ${v.running ? `
-        <div class="run-log">
-          <div class="run-log-bar"><div style="width:${v.runProgress}%"></div></div>
-          <div class="run-log-lines">${v.lastLogLines.map(line => `<div>› ${esc(line)}</div>`).join('')}</div>
-        </div>` : ''}`;
-
-    document.getElementById('colLeftContent').innerHTML = html;
-  }
-
-  function renderRightCol(v) {
-    const t = v.t;
-    let html = '';
-
-    html += `<div class="card accent-orange">
-      <div class="panel-head"><div class="badge badge-orange">03</div><div class="panel-title">${esc(t.results.title)}</div></div>
-      ${v.notRun ? `<div class="results-empty">${esc(t.results.noResults)}</div>` : `<div class="results-summary">${esc(t.suitability.mean)} <b style="color:#23281f">0.78</b></div>`}
-      ${v.modelRun ? `
-        <div class="climate-sub-title" style="margin-top:12px">${esc(t.climate.optimalTitle)}</div>
-        <div class="climate-stats">
-          ${v.responseCurves.map(cv => `
-            <div class="climate-stat-row"><div class="climate-stat-label">${esc(cv.displayName)}</div><div class="climate-stat-value">${cv.optimalFmt} ${esc(cv.unit)}</div></div>`).join('')}
-        </div>` : ''}
-    </div>`;
-
     html += `<div class="card accent-blue">
-      <div class="panel-head"><div class="badge badge-blue">04</div><div class="panel-title">${esc(t.climate.title)}</div></div>
+      <div class="panel-head"><div class="badge badge-blue">03</div><div class="panel-title">${esc(t.climate.title)}</div></div>
       <div class="climate-sub-title">${esc(t.climate.projectTitle)}</div>
       <div class="field-row">
         <div class="field-label-row" style="margin-bottom:5px"><div>${esc(t.climate.yearLabel)}</div></div>
@@ -465,7 +615,32 @@
             <div class="climate-stat-row"><div class="climate-stat-label">${esc(t.climate.projectedLabel)}: ${esc(cv.displayName)}</div><div class="climate-stat-value">${cv.projectedFmt} ${esc(cv.unit)}</div></div>`).join('')}
         </div>` : ''}
       <div class="climate-note">${esc(t.climate.note)}</div>
-      <div class="run-btn run-btn-secondary" style="background:${v.runBtnColor}" data-action="runModel">▶ ${esc(v.runBtnLabel)}</div>
+    </div>`;
+
+    html += `<div class="run-btn" style="background:${v.runBtnColor}" data-action="runModel">▶ ${esc(v.runBtnLabel)}</div>
+      <div class="run-note">${esc(v.canRunNote)}</div>
+      ${v.running ? `
+        <div class="run-log">
+          <div class="run-log-bar"><div style="width:${v.runProgress}%"></div></div>
+          <div class="run-log-lines">${v.lastLogLines.map(line => `<div>› ${esc(line)}</div>`).join('')}</div>
+        </div>` : ''}`;
+
+    document.getElementById('colLeftContent').innerHTML = html;
+  }
+
+  function renderRightCol(v) {
+    const t = v.t;
+    let html = '';
+
+    html += `<div class="card accent-orange">
+      <div class="panel-head"><div class="badge badge-orange">05</div><div class="panel-title">${esc(t.results.title)}</div></div>
+      ${v.notRun ? `<div class="results-empty">${esc(t.results.noResults)}</div>` : `<div class="results-summary">${esc(t.suitability.mean)} <b style="color:#23281f">0.78</b></div>`}
+      ${v.modelRun ? `
+        <div class="climate-sub-title" style="margin-top:12px">${esc(t.climate.optimalTitle)}</div>
+        <div class="climate-stats">
+          ${v.responseCurves.map(cv => `
+            <div class="climate-stat-row"><div class="climate-stat-label">${esc(cv.displayName)}</div><div class="climate-stat-value">${cv.optimalFmt} ${esc(cv.unit)}</div></div>`).join('')}
+        </div>` : ''}
     </div>`;
 
     document.getElementById('colRightContent').innerHTML = html;
@@ -514,34 +689,28 @@
 
     document.getElementById('mapPanelTitle').textContent = t.mapPanel.title;
     document.getElementById('mapTabDist').textContent = t.mapPanel.distribution;
-    document.getElementById('mapTabDist').classList.toggle('active', v.showDistribution);
+    document.getElementById('mapTabDist').classList.toggle('active', v.mapTab === 'distribution');
     document.getElementById('mapTabRainfall').textContent = t.mapPanel.rainfallMap;
     document.getElementById('mapTabRainfall').classList.toggle('active', v.mapTab === 'rainfall');
     document.getElementById('mapTabTemperature').textContent = t.mapPanel.temperatureMap;
     document.getElementById('mapTabTemperature').classList.toggle('active', v.mapTab === 'temperature');
-    document.getElementById('mapTabCompare').textContent = t.mapPanel.compare;
-    document.getElementById('mapTabCompare').classList.toggle('active', v.showCompare);
     document.getElementById('mapRealNote').textContent = rasterTab ? t.map.rasterNote : t.map.realNote;
 
     const noResultsBox = document.getElementById('noResultsBox');
     const rasterMissing = rasterTab && !v.rasterTabInfo.loaded;
-    const showNoResults = (v.showCompare && v.notRun) || rasterMissing;
-    noResultsBox.style.display = showNoResults ? 'block' : 'none';
-    noResultsBox.textContent = rasterMissing ? t.mapPanel.rasterNotLoaded : t.results.noResults;
-    document.getElementById('leafletMap').style.display = showNoResults ? 'none' : 'block';
+    noResultsBox.style.display = rasterMissing ? 'block' : 'none';
+    noResultsBox.textContent = t.mapPanel.rasterNotLoaded;
+    document.getElementById('leafletMap').style.display = rasterMissing ? 'none' : 'block';
 
     const gradientEl = document.getElementById('mapGradient');
     const scaleLabelsEl = document.getElementById('mapScaleLabels');
     const speciesLegendEl = document.getElementById('mapLegendSpecies');
     const riskNoteEl = document.getElementById('mapRiskNote');
 
-    if (v.showDistribution) {
-      gradientEl.style.display = 'none';
-      scaleLabelsEl.style.display = 'none';
-      riskNoteEl.style.display = 'none';
-      speciesLegendEl.innerHTML = v.legendSpecies.map(l => `
-        <div class="legend-item"><div class="legend-dot" style="background:${l.color}"></div>${esc(l.displayName)}</div>`).join('');
-    } else if (v.showCompare && v.modelRun) {
+    // Once the model has run, every tab recolors occurrence points by
+    // projected risk instead of species — so the risk gradient + note
+    // replaces the species legend everywhere, not just on one dedicated tab.
+    if (v.modelRun) {
       gradientEl.style.display = 'block';
       gradientEl.style.background = 'linear-gradient(to right,#6ea55a,#d9a441,#c1573a)';
       scaleLabelsEl.style.display = 'flex';
@@ -549,27 +718,22 @@
       riskNoteEl.style.display = 'block';
       riskNoteEl.innerHTML = `${esc(v.t.risk.highArea)} <b style="color:#c1573a">${v.highRiskPct}%</b> ${esc(v.t.risk.ofArea)}`;
       speciesLegendEl.innerHTML = '';
-    } else if (rasterTab && v.rasterTabInfo.loaded) {
+    } else {
       gradientEl.style.display = 'none';
       scaleLabelsEl.style.display = 'none';
       riskNoteEl.style.display = 'none';
       speciesLegendEl.innerHTML = v.legendSpecies.map(l => `
         <div class="legend-item"><div class="legend-dot" style="background:${l.color}"></div>${esc(l.displayName)}</div>`).join('');
-    } else {
-      gradientEl.style.display = 'none';
-      scaleLabelsEl.style.display = 'none';
-      riskNoteEl.style.display = 'none';
-      speciesLegendEl.innerHTML = '';
     }
   }
 
   // --- Leaflet map: a single persistent map instance, updated in place so it
   // never gets torn down by the innerHTML re-renders above. ---
-  let map, pointsLayer, rasterOverlay, boundaryOutline, tileLayer, boundsFitted = false;
+  let map, pointsLayer, rasterOverlay, boundaryOutline, boundsFitted = false;
 
   function initMap() {
     map = L.map('leafletMap', { scrollWheelZoom: true, preferCanvas: true });
-    tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
       maxZoom: 18
     }).addTo(map);
@@ -634,6 +798,15 @@
     if (classLegendControl) { map.removeControl(classLegendControl); classLegendControl = null; }
   }
 
+  // Once the model has run, every tab colors points by projected risk
+  // instead of species — there's no separate "Compare Scenario" tab anymore.
+  function pointStyle(v, pt) {
+    if (!v.modelRun) return { fillColor: pt.color, popup: esc(pt.species) };
+    const risk = v.pointRisk(pt.latlng[0], pt.latlng[1]);
+    const popup = esc(pt.species) + (risk !== null ? ' — ' + (risk > 0 ? '−' : '+') + Math.abs(Math.round(risk * 100)) + '% HSI' : '');
+    return { fillColor: riskPointColor(risk), popup };
+  }
+
   function updateLeafletLayers(v) {
     if (!map) return;
     pointsLayer.clearLayers();
@@ -641,14 +814,12 @@
     if (boundaryOutline) { map.removeLayer(boundaryOutline); boundaryOutline = null; }
 
     const rasterTab = v.mapTab === 'rainfall' || v.mapTab === 'temperature';
-    tileLayer.setOpacity(rasterTab ? 0 : 1);
-    document.getElementById('leafletMap').classList.toggle('map-plain-bg', rasterTab);
 
     if (rasterTab) {
       if (v.rasterTabInfo.loaded) {
         const layer = state.layers.find(l => l.id === v.mapTab);
         const [west, south, east, north] = layer.raster.bbox;
-        rasterOverlay = L.imageOverlay(layer.raster.imgUrl, [[south, west], [north, east]], { opacity: 0.95 }).addTo(map);
+        rasterOverlay = L.imageOverlay(layer.raster.imgUrl, [[south, west], [north, east]], { opacity: 0.7 }).addTo(map);
         if (state.provinceBoundaries) {
           boundaryOutline = L.geoJSON(state.provinceBoundaries, {
             style: { color: '#23281f', weight: 0.7, opacity: 0.55, fill: false },
@@ -665,24 +836,23 @@
         removeClassLegend();
       }
       v.visiblePoints.forEach(pt => {
+        const { fillColor, popup } = pointStyle(v, pt);
         L.circleMarker(pt.latlng, {
-          radius: 3, color: '#ffffff', weight: 1, fillColor: pt.color, fillOpacity: 0.9
-        }).bindPopup(esc(pt.species)).addTo(pointsLayer);
+          radius: 3, color: '#ffffff', weight: 1, fillColor, fillOpacity: 0.9
+        }).bindPopup(popup).addTo(pointsLayer);
       });
       return;
     }
     removeClassLegend();
 
-    if (v.showCompare && v.notRun) return;
+    // Distribution tab: a light Thailand outline for context, on top of the
+    // real OSM basemap (no permanent labels — the basemap already carries
+    // place names at this zoom).
+    const outlineSource = state.provinceBoundaries || THAILAND_BOUNDARY;
+    boundaryOutline = L.geoJSON(outlineSource, { style: { color: '#3a4033', weight: 0.7, opacity: 0.5, fill: false } }).addTo(map);
 
     v.visiblePoints.forEach(pt => {
-      let fillColor = pt.color;
-      let popup = esc(pt.species);
-      if (v.showCompare && v.modelRun) {
-        const risk = v.pointRisk(pt.latlng[0], pt.latlng[1]);
-        fillColor = riskPointColor(risk);
-        popup = esc(pt.species) + (risk !== null ? ' — ' + (risk > 0 ? '−' : '+') + Math.abs(Math.round(risk * 100)) + '% HSI' : '');
-      }
+      const { fillColor, popup } = pointStyle(v, pt);
       L.circleMarker(pt.latlng, {
         radius: 4, color: '#ffffff', weight: 1, fillColor, fillOpacity: 0.9
       }).bindPopup(popup).addTo(pointsLayer);
