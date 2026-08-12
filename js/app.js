@@ -12,7 +12,8 @@
     log: [],
     unmatchedRasterFiles: [],
     leftCollapsed: false,
-    rightCollapsed: false
+    rightCollapsed: false,
+    provinceBoundaries: null
   };
 
   let runTimer = null;
@@ -607,7 +608,11 @@
         const layer = state.layers.find(l => l.id === v.mapTab);
         const [west, south, east, north] = layer.raster.bbox;
         rasterOverlay = L.imageOverlay(layer.raster.imgUrl, [[south, west], [north, east]], { opacity: 0.95 }).addTo(map);
-        boundaryOutline = L.geoJSON(THAILAND_BOUNDARY, { style: { color: '#23281f', weight: 1.2, fill: false } }).addTo(map);
+        if (state.provinceBoundaries) {
+          boundaryOutline = L.geoJSON(state.provinceBoundaries, { style: { color: '#23281f', weight: 0.7, opacity: 0.55, fill: false } }).addTo(map);
+        } else {
+          boundaryOutline = L.geoJSON(THAILAND_BOUNDARY, { style: { color: '#23281f', weight: 1.2, fill: false } }).addTo(map);
+        }
       }
       return;
     }
@@ -678,6 +683,10 @@
     initMap();
     render();
     loadDefaultRasters();
+    fetch('./assets/thailand-provinces.geojson')
+      .then(r => { if (!r.ok) throw new Error('Failed to load province boundaries'); return r.json(); })
+      .then(geo => { state.provinceBoundaries = geo; render(); })
+      .catch(err => console.error(err));
   }
 
   boot();
