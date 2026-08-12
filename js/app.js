@@ -106,6 +106,18 @@
   }
 
   function updateSetting(key, val) { state.settings[key] = val; render(); }
+
+  // The climate-scenario numeric boxes show the absolute value the user is
+  // projecting to (defaulting to the current real/observed value), not the
+  // delta itself — this converts what was typed back into a delta against
+  // the current optimal value for storage.
+  const CURVE_ID_BY_DELTA_FIELD = { tempDelta: 'temp', rainfallDelta: 'rainfall', dustDelta: 'dust' };
+  function setClimateAbsolute(field, value) {
+    const curveId = CURVE_ID_BY_DELTA_FIELD[field];
+    const curve = computeVals().responseCurves.find(c => c.id === curveId);
+    state.settings[field] = Number(value) - curve.optimalValue;
+    render();
+  }
   function setLang(l) { state.lang = l; render(); }
   function setMapTab(tab) { state.mapTab = tab; render(); }
   function toggleSpecies(id) { state.speciesSel[id] = !state.speciesSel[id]; render(); }
@@ -287,6 +299,8 @@
       const field = el.getAttribute('data-field');
       const numeric = el.getAttribute('data-numeric') === 'true';
       updateSetting(field, numeric ? Number(el.value) : el.value);
+    } else if (onchange === 'climateAbsolute') {
+      setClimateAbsolute(el.getAttribute('data-field'), el.value);
     } else if (onchange === 'fileUpload') {
       onFileUpload(e);
     } else if (onchange === 'rasterUpload') {
@@ -456,6 +470,7 @@
       const decimals = c.id === 'rainfall' ? 0 : 1;
       return {
         ...c, displayName: t.variables[c.variable] || c.variable,
+        optimalValue, projectedValue, decimals,
         optimalFmt: optimalValue.toFixed(decimals),
         projectedFmt: projectedValue.toFixed(decimals),
         deltaFmt: (delta > 0 ? '+' : '') + delta.toFixed(decimals),
@@ -620,27 +635,22 @@
           ${[2030, 2050, 2070].map(y => `<option value="${y}" ${v.settings.targetYear === y ? 'selected' : ''}>${y}</option>`).join('')}
         </select>
       </div>
-      <div class="field-row">
-        <div class="field-label-row"><div>${esc(t.climate.tempLabel)}</div></div>
-        <div class="numeric-box">
-          <input type="number" step="0.5" min="-5" max="5" value="${v.settings.tempDelta}" data-onchange="setting" data-field="tempDelta" data-numeric="true">
-          <span class="numeric-box-unit">°C</span>
-        </div>
-      </div>
-      <div class="field-row">
-        <div class="field-label-row"><div>${esc(t.climate.rainfallLabel)}</div></div>
-        <div class="numeric-box">
-          <input type="number" step="50" min="-1000" max="1000" value="${v.settings.rainfallDelta}" data-onchange="setting" data-field="rainfallDelta" data-numeric="true">
-          <span class="numeric-box-unit">mm</span>
-        </div>
-      </div>
-      <div class="field-row" style="margin-bottom:0">
-        <div class="field-label-row"><div>${esc(t.climate.dustLabel)}</div></div>
-        <div class="numeric-box">
-          <input type="number" step="1" min="-30" max="30" value="${v.settings.dustDelta}" data-onchange="setting" data-field="dustDelta" data-numeric="true">
-          <span class="numeric-box-unit">μg/m³</span>
-        </div>
-      </div>
+      ${(() => {
+        const curveById = Object.fromEntries(v.responseCurves.map(c => [c.id, c]));
+        const box = (labelKey, field, curveId, unit, step) => {
+          const c = curveById[curveId];
+          return `<div class="field-row" style="margin-bottom:${curveId === 'dust' ? '0' : '14px'}">
+            <div class="field-label-row"><div>${esc(t.climate[labelKey])}</div></div>
+            <div class="numeric-box">
+              <input type="number" step="${step}" min="${c.min}" max="${c.max}" value="${c.projectedValue.toFixed(c.decimals)}" data-onchange="climateAbsolute" data-field="${field}">
+              <span class="numeric-box-unit">${esc(unit)}</span>
+            </div>
+          </div>`;
+        };
+        return box('tempLabel', 'tempDelta', 'temp', '°C', '0.5')
+          + box('rainfallLabel', 'rainfallDelta', 'rainfall', 'mm', '50')
+          + box('dustLabel', 'dustDelta', 'dust', 'μg/m³', '1');
+      })()}
       ${v.modelRun ? `
         <div class="climate-stats" style="margin-top:14px">
           ${v.responseCurves.map(cv => `
@@ -675,13 +685,6 @@
         </div>` : ''}
     </div>`;
 
-    document.getElementById('colRightContent').innerHTML = html;
-  }
-
-  function renderMapExtra(v) {
-    const t = v.t;
-    let html = '';
-
     html += `<div class="card">
       <div class="results-head">
         <svg width="13" height="13" viewBox="0 0 13 13"><polyline points="0,11 4,5 7,8 13,1" fill="none" stroke="#4f7942" stroke-width="1.6"></polyline></svg>
@@ -712,7 +715,7 @@
         </div>`).join('') : `<div class="results-summary">${esc(t.results.noResults)}</div>`}
     </div>`;
 
-    document.getElementById('colMapExtra').innerHTML = html;
+    document.getElementById('colRightContent').innerHTML = html;
   }
 
   function renderMapChrome(v) {
@@ -911,7 +914,6 @@
     renderTop(v);
     renderLeftCol(v);
     renderRightCol(v);
-    renderMapExtra(v);
     renderMapChrome(v);
     renderCollapse();
     updateLeafletLayers(v);
