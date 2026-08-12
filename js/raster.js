@@ -106,11 +106,15 @@ function countPointsOutsideRaster(raster, points) {
 // the TMD Climate Atlas legends (cool-to-hot for temperature, pale-to-purple
 // for rainfall). Each stop is {t: 0-1, r, g, b}.
 const TEMP_RAMP = [
-  { t: 0, r: 0x2c, g: 0x7f, b: 0xb8 },
-  { t: 0.25, r: 0x7f, g: 0xc9, b: 0x7f },
-  { t: 0.5, r: 0xd9, g: 0xd9, b: 0x4f },
-  { t: 0.75, r: 0xe8, g: 0x8a, b: 0x2a },
-  { t: 1, r: 0xb5, g: 0x1f, b: 0x1f }
+  { t: 0, r: 0x2e, g: 0x1a, b: 0x6b },
+  { t: 0.15, r: 0x2b, g: 0x4b, b: 0xc4 },
+  { t: 0.30, r: 0x22, g: 0x9e, b: 0xd6 },
+  { t: 0.45, r: 0x2e, g: 0xc4, b: 0x8a },
+  { t: 0.58, r: 0x8b, g: 0xc3, b: 0x4a },
+  { t: 0.70, r: 0xf9, g: 0xd4, b: 0x23 },
+  { t: 0.80, r: 0xf4, g: 0x8c, b: 0x1f },
+  { t: 0.90, r: 0xd8, g: 0x43, b: 0x15 },
+  { t: 1, r: 0x7a, g: 0x0a, b: 0x0a }
 ];
 
 const RAINFALL_RAMP = [
@@ -129,7 +133,7 @@ const RASTER_RAMPS = { rainfall: RAINFALL_RAMP, temperature: TEMP_RAMP };
 // comparable across datasets and matches the classed look of the source.
 const RASTER_CLASSES = {
   rainfall: { unit: 'mm.', breaks: [0, 0.1, 5, 10, 20, 35, 60, 90, 120, 150, 200, 300, 400, 600, 800, 1000, 1400, 1800, 2400, 3000, 4000] },
-  temperature: { unit: '°C', breaks: [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32] }
+  temperature: { unit: '°C', breaks: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44] }
 };
 
 function rampColor(stops, t) {
