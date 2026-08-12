@@ -7,7 +7,7 @@
     speciesSel: { great: true, wreathed: true, rufous: true, rhino: true, helmeted: true },
     layers: ENV_LAYERS.map(l => ({ ...l })),
     settings: { targetYear: 2035, tempDelta: 0, rainfallDelta: 0, dustDelta: 0 },
-    dataValidated: false,
+    dataValidated: true, // bundled sample data is loaded and considered validated by default
     running: false,
     runProgress: 0,
     modelRun: false,
@@ -663,10 +663,11 @@
       <input id="csvUpload" type="file" accept=".csv,.txt" multiple style="display:none" data-onchange="fileUpload">` : ''}
       ${v.uploads.map(u => `
         <div class="upload-row"><div class="upload-name">${esc(u.name)}</div><div class="upload-status" style="color:${u.color}">${esc(u.statusLabel)}</div></div>`).join('')}
+      ${SHOW_UPLOADS ? `
       <div class="btn-row">
         <div class="btn btn-tan" data-action="useSampleData">${esc(t.samples.useSample)}</div>
         <div class="btn btn-green" data-action="validateData">${esc(t.occurrence.validate)}</div>
-      </div>
+      </div>` : ''}
       ${v.dataValidated ? `<div class="valid-note">${esc(v.validNote)}</div>` : ''}
     </div>`;
 
@@ -732,12 +733,7 @@
                   ${l.hasDefaultSample ? `<div class="btn btn-tan" data-action="useSampleRaster" data-id="${l.id}">${esc(t.samples.useSample)}</div>` : ''}
                   <div class="btn btn-green" data-action="validateStationData" data-id="${l.id}">${esc(t.occurrence.validate)}</div>
                 </div>
-              </div>` : (l.hasDefaultSample ? `
-              <div class="station-upload">
-                <div class="btn-row">
-                  <div class="btn btn-tan" data-action="useSampleRaster" data-id="${l.id}">${esc(t.samples.useSample)}</div>
-                </div>
-              </div>` : '')}`}
+              </div>` : ''}`}
           </div>`).join('')}
       `).join('')}
     </div>`;
