@@ -10,15 +10,6 @@ const SPECIES = [
   { id: 'helmeted', common: 'Helmeted Hornbill', thai: 'นกชนหิน', latin: 'Rhinoplax vigil', color: '#bb32c4', total: 24, points: [[8.88997,98.59915],[8.95871,98.41553],[8.93333,98.66607],[5.99575,101.83421],[8.98735,98.76742],[6.13222,101.62008],[9.05071,98.69439],[5.94677,101.72634],[5.96907,101.27238],[5.89913,101.9769],[5.86154,101.81058],[5.97525,101.83878],[5.9854,101.36297],[5.85547,101.36313],[6.02279,101.31382],[6.18703,101.3114],[6.0241,101.37061],[5.9689,101.9083],[5.85661,101.98779],[9.16111,98.58746],[8.61028,98.21894],[9.14908,98.66652],[5.88827,101.98686],[9.13622,98.6242]] }
 ];
 
-// Boundary polygons are loaded at runtime from assets/study-areas.json, keyed by id.
-// Each boundary is a convex hull computed directly from the real GBIF occurrence
-// points in that region — not an official protected-area or watershed boundary.
-const STUDY_AREAS = [
-  { id: 'western', name: 'Western Forest Complex', thai: 'กลุ่มป่าตะวันตก' },
-  { id: 'doiinthanon', name: 'Doi Inthanon–Mae Wang Highlands', thai: 'ดอยอินทนนท์–แม่วาง' },
-  { id: 'southern', name: 'Southern Peninsular Forest Corridor', thai: 'ผืนป่าคาบสมุทรภาคใต้' }
-];
-
 // `keywords` are used to auto-match an uploaded raster filename to a layer
 // (see js/raster.js). `status` starts 'not_loaded' for every layer since it
 // now reflects whether a real raster file has actually been attached.

@@ -72,38 +72,20 @@ a:hover { color: #2f5570; }
   margin-bottom: 14px;
   box-shadow: 0 1px 2px rgba(35,40,31,0.03), 0 3px 10px rgba(35,40,31,0.03);
 }
-.card.accent-green { border-left: 3px solid #4f7942; }
 .card.accent-brown { border-left: 3px solid #a85a34; }
 .card.accent-blue { border-left: 3px solid #5f8fae; }
-.card.accent-gold { border-left: 3px solid #8a7c3f; }
 .card.accent-orange { border-left: 3px solid #b5652f; }
 
 .panel-head { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
 .badge { font-family: ui-monospace, Menlo, monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.03em; padding: 3px 6px; border-radius: 4px; flex-shrink: 0; }
-.badge-green { background: #eef2ea; color: #4f7942; }
 .badge-brown { background: #f6e9df; color: #a85a34; }
+.badge-green { background: #eef2ea; color: #4f7942; }
 .badge-blue { background: #eaf1f6; color: #3d6a8a; }
-.badge-gold { background: #f2efe0; color: #8a7c3f; }
 .badge-orange { background: #fbeee4; color: #b5652f; }
 .panel-title { font-size: 13px; font-weight: 700; }
 
-.species-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid #e6e1d2; border-radius: 6px; margin-bottom: 5px; cursor: pointer; }
-.species-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-.species-name { font-size: 12px; font-weight: 600; flex: 1; }
-.species-total { font-size: 11px; color: #8a8f80; }
-
 .dropzone { display: flex; align-items: center; justify-content: center; border: 1.5px dashed #cbb98a; border-radius: 7px; padding: 10px; cursor: pointer; background: #f9f7f0; margin-top: 8px; }
 .dropzone-label { font-size: 11.5px; font-weight: 600; color: #8a6a4f; }
-
-.upload-row { display: flex; align-items: center; gap: 6px; padding: 5px 2px; font-size: 11px; }
-.upload-name { font-family: ui-monospace, monospace; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.upload-status { font-weight: 600; }
-
-.btn-row { display: flex; gap: 8px; margin-top: 10px; }
-.btn { flex: 1; text-align: center; font-size: 11.5px; font-weight: 600; padding: 8px; border-radius: 6px; cursor: pointer; }
-.btn-tan { color: #a85a34; background: #f6e9df; }
-.btn-green { color: #ffffff; background: #4f7942; }
-.valid-note { margin-top: 8px; font-size: 10.5px; color: #4f7942; font-weight: 600; }
 
 .group-label { font-size: 10px; font-weight: 700; color: #8a8f80; letter-spacing: 0.04em; margin: 8px 0 4px; }
 .layer-row { border: 1px solid #eee9db; border-radius: 6px; padding: 6px 8px; margin-bottom: 5px; }
@@ -130,26 +112,10 @@ a:hover { color: #2f5570; }
 .raster-warning { color: #c1573a; font-weight: 600; margin-top: 3px; }
 .raster-change { color: #4f7942; font-weight: 600; cursor: pointer; margin-top: 4px; }
 
-.area-row { border: 2px solid #e6e1d2; border-radius: 7px; padding: 9px 10px; margin-bottom: 6px; cursor: pointer; }
-.area-row.selected { border-color: #4f7942; }
-.area-name { font-size: 12px; font-weight: 700; }
-.area-meta { font-size: 10.5px; color: #8a8f80; margin-top: 3px; }
-
-.tabs3 { display: flex; background: #f0ede1; border-radius: 7px; padding: 3px; margin-bottom: 12px; }
-.tab3 { flex: 1; text-align: center; font-size: 11.5px; font-weight: 600; padding: 6px; border-radius: 5px; cursor: pointer; color: #8a8f80; }
-.tab3.active { background: #fff; color: #23281f; }
-
 .field-row { margin-bottom: 14px; }
 .field-label-row { display: flex; justify-content: space-between; font-size: 11px; color: #8a8f80; font-weight: 600; margin-bottom: 5px; }
 .field-row input[type=range] { width: 100%; }
 .field-row select { width: 100%; font-size: 12.5px; padding: 7px 8px; border: 1px solid #e6e1d2; border-radius: 6px; background: #fff; }
-.future-box { padding: 10px; background: #f6f4ec; border-radius: 7px; }
-.future-box .field-label-row { color: #8a6a4f; font-weight: 700; }
-
-.export-row { display: flex; align-items: center; gap: 8px; padding: 8px 9px; border: 1px solid #e6e1d2; border-radius: 6px; margin-bottom: 6px; cursor: pointer; }
-.export-swatch { width: 13px; height: 13px; border-radius: 3px; flex-shrink: 0; }
-.export-label { font-size: 12px; font-weight: 600; flex: 1; }
-.generated-note { margin-top: 8px; font-size: 10.5px; color: #3a4033; }
 
 .run-btn { text-align: center; font-size: 13px; font-weight: 700; color: #fff; padding: 12px; border-radius: 8px; cursor: pointer; }
 .run-note { font-size: 10.5px; color: #8a8f80; margin-top: 6px; text-align: center; }

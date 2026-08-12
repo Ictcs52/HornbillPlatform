@@ -3,24 +3,13 @@
 
   const state = {
     lang: 'en',
-    settingsTab: 'basic',
     mapTab: 'distribution',
-    speciesSel: { great: true, wreathed: true, rufous: true, rhino: true, helmeted: true },
-    studyArea: 'western',
     layers: ENV_LAYERS.map(l => ({ ...l })),
-    settings: { resolution: '100', testSplit: 25, regularization: 1.0, scenario: 'current', forestLoss: 15, replicates: 3, targetYear: 2035, tempDelta: 0, rainfallDelta: 0, dustDelta: 0 },
-    dataValidated: false,
+    settings: { targetYear: 2035, tempDelta: 0, rainfallDelta: 0, dustDelta: 0 },
     running: false,
     runProgress: 0,
     modelRun: false,
     log: [],
-    exportSel: { pdf: true, png: true, geotiff: false, csv: true },
-    reportGenerated: false,
-    uploads: [],
-    boundaries: null,
-    dataSource: 'sample', // 'sample' | 'upload'
-    uploadedRows: [],
-    uploadedSpecies: null,
     unmatchedRasterFiles: [],
     leftCollapsed: false,
     rightCollapsed: false
@@ -28,122 +17,13 @@
 
   let runTimer = null;
 
-  const UPLOAD_PALETTE = ['#1f9e4a', '#d9a319', '#e8552a', '#1f9bd9', '#bb32c4', '#4f7942', '#a85a34', '#3d6a8a', '#8a7c3f', '#b5652f'];
-
-  // Ray-casting point-in-polygon test. `ring` is a GeoJSON linear ring: [[lon,lat], ...].
-  function pointInRing(lat, lon, ring) {
-    let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const xi = ring[i][0], yi = ring[i][1];
-      const xj = ring[j][0], yj = ring[j][1];
-      const intersect = ((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi);
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }
-
-  function pointInFeature(lat, lon, feature) {
-    const geom = feature && feature.geometry;
-    if (!geom) return false;
-    if (geom.type === 'Polygon') return pointInRing(lat, lon, geom.coordinates[0]);
-    if (geom.type === 'MultiPolygon') return geom.coordinates.some(poly => pointInRing(lat, lon, poly[0]));
-    return false;
-  }
-
-  function matchKnownSpecies(name) {
-    const n = name.trim().toLowerCase();
-    return SPECIES.find(sp => sp.id.toLowerCase() === n || sp.common.toLowerCase() === n
-      || (sp.latin && sp.latin.toLowerCase() === n) || sp.thai === name.trim());
-  }
-
-  const SPECIES_COLS = ['species', 'name', 'scientificname', 'verbatimscientificname'];
-  const LON_COLS = ['lon', 'lng', 'longitude', 'decimallongitude'];
-  const LAT_COLS = ['lat', 'latitude', 'decimallatitude'];
-
-  // Parses occurrence text into {species, lon, lat} rows. Supports plain
-  // "species,lon,lat" CSV as well as GBIF occurrence downloads, whose "CSV"
-  // export is actually tab-delimited Darwin Core (columns like species,
-  // decimalLatitude, decimalLongitude among many others).
-  function parseCsvText(text) {
-    const lines = String(text || '').split(/\r\n|\n|\r/).map(l => l.replace(/\r$/, '')).filter(l => l.trim().length);
-    if (!lines.length) return { rows: [], errorCount: 0 };
-
-    const commaCount = (lines[0].match(/,/g) || []).length;
-    const tabCount = (lines[0].match(/\t/g) || []).length;
-    const delim = tabCount > commaCount ? '\t' : ',';
-    const split = line => line.split(delim).map(c => c.trim().replace(/^"|"$/g, ''));
-
-    let startIdx = 0;
-    let idx = { species: 0, lon: 1, lat: 2 };
-    const headerCells = split(lines[0]).map(c => c.toLowerCase());
-    const looksLikeHeader = headerCells.some(c => SPECIES_COLS.includes(c) || LON_COLS.includes(c) || LAT_COLS.includes(c));
-    if (looksLikeHeader) {
-      startIdx = 1;
-      const idxOf = names => headerCells.findIndex(c => names.includes(c));
-      const sIdx = idxOf(SPECIES_COLS);
-      const loIdx = idxOf(LON_COLS);
-      const laIdx = idxOf(LAT_COLS);
-      if (sIdx >= 0) idx.species = sIdx;
-      if (loIdx >= 0) idx.lon = loIdx;
-      if (laIdx >= 0) idx.lat = laIdx;
-    }
-
-    const rows = [];
-    let errorCount = 0;
-    for (let i = startIdx; i < lines.length; i++) {
-      if (!lines[i].trim()) continue;
-      const cells = split(lines[i]);
-      const species = cells[idx.species];
-      const lon = parseFloat(cells[idx.lon]);
-      const lat = parseFloat(cells[idx.lat]);
-      if (!species || !isFinite(lon) || !isFinite(lat) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-        errorCount++;
-        continue;
-      }
-      rows.push({ species, lon, lat });
-    }
-    return { rows, errorCount };
-  }
-
-  function buildUploadedSpecies(rows) {
-    const groups = new Map();
-    rows.forEach(r => {
-      const known = matchKnownSpecies(r.species);
-      const key = known ? known.id : 'custom_' + r.species.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
-      if (!groups.has(key)) {
-        groups.set(key, {
-          id: key,
-          common: known ? known.common : r.species.trim(),
-          thai: known ? known.thai : r.species.trim(),
-          color: known ? known.color : UPLOAD_PALETTE[groups.size % UPLOAD_PALETTE.length],
-          points: []
-        });
-      }
-      groups.get(key).points.push([r.lat, r.lon]);
-    });
-    return Array.from(groups.values()).map(g => ({ ...g, total: g.points.length }));
-  }
-
   function esc(s) {
     return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
   function updateSetting(key, val) { state.settings[key] = val; render(); }
   function setLang(l) { state.lang = l; render(); }
-  function setSettingsTab(tab) { state.settingsTab = tab; render(); }
   function setMapTab(tab) { state.mapTab = tab; render(); }
-  function toggleSpecies(id) { state.speciesSel[id] = !state.speciesSel[id]; render(); }
-  function selectStudyArea(id) { state.studyArea = id; render(); }
-  function validateData() { state.dataValidated = true; render(); }
-  function useSampleData() {
-    state.dataSource = 'sample';
-    state.uploadedRows = [];
-    state.uploadedSpecies = null;
-    state.speciesSel = { great: true, wreathed: true, rufous: true, rhino: true, helmeted: true };
-    state.dataValidated = true;
-    render();
-  }
-  function useSampleBoundary() { state.studyArea = 'western'; render(); }
   function toggleLeftPanel() { state.leftCollapsed = !state.leftCollapsed; render(); }
   function toggleRightPanel() { state.rightCollapsed = !state.rightCollapsed; render(); }
   function updateLayerField(id, field, value) {
@@ -209,43 +89,8 @@
   }
   function addLayer() {
     const id = 'custom' + Date.now();
-    state.layers = [...state.layers, { id, name: 'New Variable', group: 'Vegetation', resolution: '100m', source: 'Custom', status: 'not_loaded' }];
+    state.layers = [...state.layers, { id, name: 'New Variable', group: 'Climate', resolution: '1km', source: 'Custom', status: 'not_loaded' }];
     render();
-  }
-  function toggleExport(key) { state.exportSel[key] = !state.exportSel[key]; render(); }
-  function generateReport() { state.reportGenerated = true; render(); }
-
-  function onFileUpload(e) {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-    const entries = files.map(f => ({ name: f.name, sizeKB: Math.max(1, Math.round(f.size / 1024)), status: 'processing' }));
-    state.uploads = [...state.uploads, ...entries];
-    render();
-
-    files.forEach((file, i) => {
-      const entryName = entries[i].name;
-      const reader = new FileReader();
-      reader.onload = () => {
-        const { rows, errorCount } = parseCsvText(reader.result);
-        if (rows.length) {
-          state.uploadedRows = [...state.uploadedRows, ...rows];
-          state.uploadedSpecies = buildUploadedSpecies(state.uploadedRows);
-          state.speciesSel = Object.fromEntries(state.uploadedSpecies.map(sp => [sp.id, true]));
-          state.dataSource = 'upload';
-          state.dataValidated = false;
-        }
-        state.uploads = state.uploads.map(u => u.name === entryName
-          ? { ...u, status: rows.length ? 'ready' : 'error', pointCount: rows.length, errorCount }
-          : u);
-        render();
-      };
-      reader.onerror = () => {
-        state.uploads = state.uploads.map(u => u.name === entryName ? { ...u, status: 'error' } : u);
-        render();
-      };
-      reader.readAsText(file);
-    });
-    e.target.value = '';
   }
 
   function runModel() {
@@ -273,9 +118,8 @@
   }
 
   const ACTIONS = {
-    setLang, setSettingsTab, setMapTab, toggleSpecies, selectStudyArea, validateData,
-    useSampleData, useSampleBoundary, removeLayer, removeRasterFromLayer,
-    addLayer, toggleExport, generateReport, runModel, toggleMapFullscreen,
+    setLang, setMapTab, removeLayer, removeRasterFromLayer,
+    addLayer, runModel, toggleMapFullscreen,
     dismissUnmatchedFile, toggleLeftPanel, toggleRightPanel
   };
 
@@ -302,8 +146,6 @@
       const field = el.getAttribute('data-field');
       const numeric = el.getAttribute('data-numeric') === 'true';
       updateSetting(field, numeric ? Number(el.value) : el.value);
-    } else if (onchange === 'fileUpload') {
-      onFileUpload(e);
     } else if (onchange === 'rasterUpload') {
       handleRasterFiles(el.files);
       el.value = '';
@@ -331,48 +173,34 @@
     }
   });
 
+  // Piecewise-linear lookup of a response curve at a real (non-normalized) value.
+  function evalCurveAt(curve, value) {
+    const x = Math.max(0, Math.min(1, (value - curve.min) / (curve.max - curve.min)));
+    const pts = curve.points;
+    for (let i = 1; i < pts.length; i++) {
+      if (x <= pts[i].x) {
+        const p0 = pts[i - 1], p1 = pts[i];
+        const t = (x - p0.x) / ((p1.x - p0.x) || 1);
+        return p0.y + t * (p1.y - p0.y);
+      }
+    }
+    return pts[pts.length - 1].y;
+  }
+
   function computeVals() {
     const st = state;
     const t = T[st.lang];
     const isTh = st.lang === 'th';
 
-    const usingUpload = st.dataSource === 'upload' && st.uploadedSpecies;
-    const activeSpecies = usingUpload ? st.uploadedSpecies : SPECIES;
-    const selectedSpecies = activeSpecies.filter(sp => st.speciesSel[sp.id]);
-    const selectedCount = selectedSpecies.length;
-    const studyArea = STUDY_AREAS.find(a => a.id === st.studyArea);
-
-    // Both SPECIES (real GBIF records) and uploaded CSV data store points as
-    // real [lat, lon] pairs, so they're plotted directly with no transform.
+    // Points stored as real [lat, lon] pairs, plotted directly, no transform.
     const visiblePoints = [];
-    selectedSpecies.forEach(sp => sp.points.forEach((latlng) => {
+    SPECIES.forEach(sp => sp.points.forEach((latlng) => {
       visiblePoints.push({ latlng, color: sp.color, species: isTh ? sp.thai : sp.common });
     }));
 
-    const speciesCards = activeSpecies.map(sp => ({
-      ...sp, displayName: isTh ? sp.thai : sp.common, totalFmt: sp.total.toLocaleString(),
-      border: st.speciesSel[sp.id] ? sp.color : '#e6e1d2', op: st.speciesSel[sp.id] ? '1' : '0.5'
-    }));
+    const legendSpecies = SPECIES.map(sp => ({ displayName: isTh ? sp.thai : sp.common, color: sp.color }));
 
-    const studyAreaOptions = STUDY_AREAS.map(a => {
-      const feature = state.boundaries ? state.boundaries.features.find(f => f.properties.id === a.id) : null;
-      let recordCount = null;
-      if (feature) {
-        recordCount = 0;
-        selectedSpecies.forEach(sp => sp.points.forEach(([lat, lon]) => {
-          if (pointInFeature(lat, lon, feature)) recordCount++;
-        }));
-      }
-      return {
-        ...a, displayName: isTh ? a.thai : a.name,
-        selected: st.studyArea === a.id,
-        recordCountLabel: recordCount === null ? '…' : recordCount.toLocaleString() + ' ' + t.studyAreaPanel.recordsLabel
-      };
-    });
-
-    const legendSpecies = selectedSpecies.map(sp => ({ displayName: isTh ? sp.thai : sp.common, color: sp.color }));
-
-    const allOccurrencePoints = activeSpecies.flatMap(sp => sp.points);
+    const allOccurrencePoints = SPECIES.flatMap(sp => sp.points);
     const loadedLayers = st.layers.filter(l => l.raster);
     let resMatch = true, crsMatch = true;
     if (loadedLayers.length > 1) {
@@ -427,15 +255,18 @@
         : (isTh ? 'กำลังอ่านไฟล์…' : 'Reading file…')
     }));
 
-    const validRecordsFmt = selectedSpecies.reduce((sum, sp) => sum + sp.total, 0).toLocaleString();
-    const validNote = '✓ ' + validRecordsFmt + (isTh ? ' ระเบียนที่ผ่านการตรวจสอบจาก ' + selectedCount + ' ชนิด' : ' valid records across ' + selectedCount + ' species');
-
-    const canRun = st.dataValidated && st.layers.some(l => l.raster) && selectedCount > 0;
+    const canRun = st.layers.some(l => l.raster);
     const runBtnLabel = st.running ? t.simulation.running : (st.modelRun ? t.simulation.runAgain : t.simulation.run);
     const runBtnColor = st.running ? '#8a8f80' : '#4f7942';
     const canRunNote = st.running ? t.simulation.notePipeline : (st.modelRun ? t.simulation.noteComplete : (canRun ? t.simulation.noteReady : t.simulation.noteBlocked));
 
     const contribBars = VARIABLE_CONTRIBUTION.map(v => ({ ...v, displayName: t.variables[v.name] || v.name, width: Math.round((v.pct / 40) * 100) }));
+
+    const pctById = {};
+    RESPONSE_CURVES.forEach(c => {
+      const vc = VARIABLE_CONTRIBUTION.find(v => v.name === c.variable);
+      pctById[c.id] = vc ? vc.pct : 1;
+    });
 
     const deltaByVarId = { temp: st.settings.tempDelta, rainfall: st.settings.rainfallDelta, dust: st.settings.dustDelta };
     const responseCurves = RESPONSE_CURVES.map(c => {
@@ -453,46 +284,46 @@
       };
     });
 
-    const scenarioWord = t.scenarioWord[st.settings.scenario] || st.settings.scenario;
-    const exportFormats = ['pdf', 'png', 'geotiff', 'csv'].map(key => ({
-      key, label: t.exportScreen.formats[key].label, bg: st.exportSel[key] ? '#4f7942' : '#e6e1d2'
-    }));
-    const generatedNote = '✓ ' + (isTh ? 'สร้างรายงานแล้ว' : 'Report generated') + ' (' + selectedCount + (isTh ? ' ชนิด, ' : ' species, ') + scenarioWord + ')';
+    // Per-point risk: for each occurrence point, sample the loaded rainfall/
+    // temperature/dust rasters at that location, evaluate the response curve
+    // at the current vs. delta-shifted value, and weight the suitability
+    // drop by each variable's model contribution. Falls back to "no data"
+    // wherever a layer isn't loaded (e.g. dust, which has no default raster).
+    function pointRisk(lat, lon) {
+      let weightedDrop = 0, weightSum = 0;
+      RESPONSE_CURVES.forEach(c => {
+        const layer = st.layers.find(l => l.id === c.id);
+        if (!layer || !layer.raster) return;
+        const v = sampleRasterAt(layer.raster, lat, lon);
+        if (v === null) return;
+        const delta = deltaByVarId[c.id] || 0;
+        const curY = evalCurveAt(c, v);
+        const projY = evalCurveAt(c, v + delta);
+        const w = pctById[c.id] || 1;
+        weightedDrop += w * (curY - projY);
+        weightSum += w;
+      });
+      return weightSum ? weightedDrop / weightSum : null;
+    }
 
-    const highRiskPct = Math.min(48, Math.round(12 + st.settings.forestLoss * 0.9));
-    const areaLabel = isTh ? studyArea.thai : studyArea.name;
+    let highRiskPct = 0;
+    if (st.modelRun) {
+      const risks = allOccurrencePoints.map(([lat, lon]) => pointRisk(lat, lon)).filter(r => r !== null);
+      highRiskPct = risks.length ? Math.round(100 * risks.filter(r => r > 0.05).length / risks.length) : 0;
+    }
 
     return {
-      t, isTh, studyArea,
+      t, isTh,
       langEnActive: st.lang === 'en', langThActive: st.lang === 'th',
-      speciesCards, studyAreaOptions, legendSpecies, layerGroups, layersSummary, unmatchedFiles,
+      legendSpecies, layerGroups, layersSummary, unmatchedFiles,
       layerAssignOptions: st.layers.map(l => ({ id: l.id, displayName: l.name })),
-      uploads: st.uploads.map(u => {
-        let statusLabel;
-        let color;
-        if (u.status === 'ready') {
-          statusLabel = t.occurrence.included + ' (' + (u.pointCount || 0).toLocaleString() + (isTh ? ' จุด' : ' pts') + (u.errorCount ? ', ' + u.errorCount + (isTh ? ' แถวข้าม' : ' skipped') : '') + ')';
-          color = '#4f7942';
-        } else if (u.status === 'error') {
-          statusLabel = isTh ? 'อ่านไฟล์ไม่ได้ / รูปแบบไม่ถูกต้อง' : 'Unreadable / invalid format';
-          color = '#c1573a';
-        } else {
-          statusLabel = isTh ? 'กำลังประมวลผล…' : 'Processing…';
-          color = '#b5652f';
-        }
-        return { ...u, statusLabel, color };
-      }),
-      dataValidated: st.dataValidated, validNote,
-      settings: st.settings, isFuture: st.settings.scenario === 'future',
-      isTabBasic: st.settingsTab === 'basic', isTabAdvanced: st.settingsTab === 'advanced', isTabOutput: st.settingsTab === 'output',
-      splitNote: st.settings.testSplit + '%', lossNote: st.settings.forestLoss + '%',
-      exportFormats, reportGenerated: st.reportGenerated, generatedNote,
+      settings: st.settings,
       runBtnColor, runBtnLabel, canRunNote, running: st.running, runProgress: st.runProgress,
       lastLogLines: st.log.slice(-3),
       showDistribution: st.mapTab === 'distribution', showCompare: st.mapTab === 'compare',
       mapTab: st.mapTab,
-      visiblePoints, modelRun: st.modelRun, notRun: !st.modelRun, highRiskPct, areaLabel,
-      contribBars, responseCurves
+      visiblePoints, modelRun: st.modelRun, notRun: !st.modelRun, highRiskPct,
+      contribBars, responseCurves, pointRisk
     };
   }
 
@@ -507,27 +338,8 @@
     const t = v.t;
     let html = '';
 
-    html += `<div class="card accent-green">
-      <div class="panel-head"><div class="badge badge-green">01</div><div class="panel-title">${esc(t.samples.title)}</div></div>
-      ${v.speciesCards.map(sp => `
-        <div class="species-row" style="border-color:${sp.border};opacity:${sp.op}" data-action="toggleSpecies" data-id="${sp.id}">
-          <div class="species-dot" style="background:${sp.color}"></div>
-          <div class="species-name">${esc(sp.displayName)}</div>
-          <div class="species-total">${sp.totalFmt}</div>
-        </div>`).join('')}
-      <label for="csvUpload" class="dropzone"><div class="dropzone-label">${esc(t.samples.dropzone)}</div></label>
-      <input id="csvUpload" type="file" accept=".csv,.txt" multiple style="display:none" data-onchange="fileUpload">
-      ${v.uploads.map(u => `
-        <div class="upload-row"><div class="upload-name">${esc(u.name)}</div><div class="upload-status" style="color:${u.color}">${esc(u.statusLabel)}</div></div>`).join('')}
-      <div class="btn-row">
-        <div class="btn btn-tan" data-action="useSampleData">${esc(t.samples.useSample)}</div>
-        <div class="btn btn-green" data-action="validateData">${esc(t.occurrence.validate)}</div>
-      </div>
-      ${v.dataValidated ? `<div class="valid-note">${esc(v.validNote)}</div>` : ''}
-    </div>`;
-
     html += `<div class="card accent-brown">
-      <div class="panel-head"><div class="badge badge-brown">02</div><div class="panel-title">${esc(t.envLayers.title)}</div></div>
+      <div class="panel-head"><div class="badge badge-brown">01</div><div class="panel-title">${esc(t.envLayers.title)}</div></div>
 
       <div class="raster-summary">${v.layersSummary.loadedCount}/${v.layersSummary.totalCount} ${esc(t.layers.loadedLabel)}${v.layersSummary.hasMultiple ? '  •  ' + esc(t.layers.resolution) + ' ' + (v.layersSummary.resMatch ? '✓' : '✗ ' + esc(t.layers.mismatch)) + '  •  CRS ' + (v.layersSummary.crsMatch ? '✓' : '✗ ' + esc(t.layers.mismatch)) : ''}</div>
 
@@ -578,67 +390,6 @@
       `).join('')}
     </div>`;
 
-    html += `<div class="card accent-blue">
-      <div class="panel-head"><div class="badge badge-blue">03</div><div class="panel-title">${esc(t.studyAreaPanel.title)}</div></div>
-      ${v.studyAreaOptions.map(a => `
-        <div class="area-row ${a.selected ? 'selected' : ''}" data-action="selectStudyArea" data-id="${a.id}">
-          <div class="area-name">${esc(a.displayName)}</div>
-          <div class="area-meta">${esc(a.recordCountLabel)}</div>
-        </div>`).join('')}
-      <div class="btn btn-tan" data-action="useSampleBoundary">${esc(t.samples.useSample)}</div>
-    </div>`;
-
-    html += `<div class="card accent-gold">
-      <div class="panel-head"><div class="badge badge-gold">04</div><div class="panel-title">${esc(t.settingsPanel.title)}</div></div>
-      <div class="tabs3">
-        <div class="tab3 ${v.isTabBasic ? 'active' : ''}" data-action="setSettingsTab" data-id="basic">${esc(t.settingsPanel.basic)}</div>
-        <div class="tab3 ${v.isTabAdvanced ? 'active' : ''}" data-action="setSettingsTab" data-id="advanced">${esc(t.settingsPanel.advanced)}</div>
-        <div class="tab3 ${v.isTabOutput ? 'active' : ''}" data-action="setSettingsTab" data-id="output">${esc(t.settingsPanel.output)}</div>
-      </div>
-      ${v.isTabBasic ? `
-        <div class="field-row">
-          <div class="field-label-row"><div>${esc(t.settingsPanel.testSplit)}</div><div>${esc(v.splitNote)}</div></div>
-          <input type="range" min="10" max="40" value="${v.settings.testSplit}" data-onchange="setting" data-field="testSplit">
-        </div>
-        <div class="field-row" style="margin-bottom:0">
-          <div class="field-label-row"><div>${esc(t.settingsPanel.replicates)}</div><div>${v.settings.replicates}</div></div>
-          <input type="range" min="1" max="10" value="${v.settings.replicates}" data-onchange="setting" data-field="replicates">
-        </div>` : ''}
-      ${v.isTabAdvanced ? `
-        <div class="field-row">
-          <div class="field-label-row" style="margin-bottom:5px"><div>${esc(t.settings.resolution)}</div></div>
-          <select data-onchange="setting" data-field="resolution">
-            <option value="30" ${v.settings.resolution === '30' ? 'selected' : ''}>${esc(t.settings.res30)}</option>
-            <option value="100" ${v.settings.resolution === '100' ? 'selected' : ''}>${esc(t.settings.res100)}</option>
-            <option value="1000" ${v.settings.resolution === '1000' ? 'selected' : ''}>${esc(t.settings.res1000)}</option>
-          </select>
-        </div>
-        <div class="field-row">
-          <div class="field-label-row"><div>${esc(t.settings.reg)}</div><div>${v.settings.regularization}</div></div>
-          <input type="range" min="0.1" max="3" step="0.1" value="${v.settings.regularization}" data-onchange="setting" data-field="regularization">
-        </div>
-        <div class="field-row" style="margin-bottom:${v.isFuture ? '12px' : '0'}">
-          <div class="field-label-row" style="margin-bottom:5px"><div>${esc(t.settings.scenario)}</div></div>
-          <select data-onchange="setting" data-field="scenario">
-            <option value="current" ${v.settings.scenario === 'current' ? 'selected' : ''}>${esc(t.settings.scenarioCurrent)}</option>
-            <option value="future" ${v.settings.scenario === 'future' ? 'selected' : ''}>${esc(t.settings.scenarioFuture)}</option>
-          </select>
-        </div>
-        ${v.isFuture ? `
-        <div class="future-box">
-          <div class="field-label-row"><div>${esc(t.settings.loss)}</div><div>${esc(v.lossNote)}</div></div>
-          <input type="range" min="0" max="60" value="${v.settings.forestLoss}" data-onchange="setting" data-field="forestLoss">
-        </div>` : ''}` : ''}
-      ${v.isTabOutput ? `
-        ${v.exportFormats.map(f => `
-          <div class="export-row" data-action="toggleExport" data-id="${f.key}">
-            <div class="export-swatch" style="background:${f.bg}"></div>
-            <div class="export-label">${esc(f.label)}</div>
-          </div>`).join('')}
-        <div class="btn btn-green" style="margin-top:4px" data-action="generateReport">${esc(t.exportScreen.generate)}</div>
-        ${v.reportGenerated ? `<div class="generated-note">${esc(v.generatedNote)}</div>` : ''}` : ''}
-    </div>`;
-
     html += `<div class="run-btn" style="background:${v.runBtnColor}" data-action="runModel">▶ ${esc(v.runBtnLabel)}</div>
       <div class="run-note">${esc(v.canRunNote)}</div>
       ${v.running ? `
@@ -655,7 +406,7 @@
     let html = '';
 
     html += `<div class="card accent-orange">
-      <div class="panel-head"><div class="badge badge-orange">06</div><div class="panel-title">${esc(t.results.title)}</div></div>
+      <div class="panel-head"><div class="badge badge-orange">03</div><div class="panel-title">${esc(t.results.title)}</div></div>
       ${v.notRun ? `<div class="results-empty">${esc(t.results.noResults)}</div>` : `<div class="results-summary">${esc(t.suitability.mean)} <b style="color:#23281f">0.78</b></div>`}
       ${v.modelRun ? `
         <div class="climate-sub-title" style="margin-top:12px">${esc(t.climate.optimalTitle)}</div>
@@ -666,12 +417,12 @@
     </div>`;
 
     html += `<div class="card accent-blue">
-      <div class="panel-head"><div class="badge badge-blue">07</div><div class="panel-title">${esc(t.climate.title)}</div></div>
+      <div class="panel-head"><div class="badge badge-blue">04</div><div class="panel-title">${esc(t.climate.title)}</div></div>
       <div class="climate-sub-title">${esc(t.climate.projectTitle)}</div>
       <div class="field-row">
         <div class="field-label-row" style="margin-bottom:5px"><div>${esc(t.climate.yearLabel)}</div></div>
         <select data-onchange="setting" data-field="targetYear" data-numeric="true">
-          ${[2035, 2050, 2070].map(y => `<option value="${y}" ${v.settings.targetYear === y ? 'selected' : ''}>${y}</option>`).join('')}
+          ${[2030, 2050, 2070].map(y => `<option value="${y}" ${v.settings.targetYear === y ? 'selected' : ''}>${y}</option>`).join('')}
         </select>
       </div>
       <div class="field-row">
@@ -771,7 +522,7 @@
 
   // --- Leaflet map: a single persistent map instance, updated in place so it
   // never gets torn down by the innerHTML re-renders above. ---
-  let map, boundaryLayer, pointsLayer, lastFittedArea = null;
+  let map, pointsLayer, boundsFitted = false;
 
   function initMap() {
     map = L.map('leafletMap', { scrollWheelZoom: true, preferCanvas: true });
@@ -795,40 +546,35 @@
     if (e.key === 'Escape' && mapFullscreen) toggleMapFullscreen();
   });
 
-  function riskColor(pct) {
-    if (pct < 25) return '#6ea55a';
-    if (pct < 38) return '#d9a441';
+  function riskPointColor(risk) {
+    if (risk === null) return '#8a8f80';
+    if (risk < 0.03) return '#6ea55a';
+    if (risk < 0.12) return '#d9a441';
     return '#c1573a';
   }
 
   function updateLeafletLayers(v) {
-    if (!map || !state.boundaries) return;
-
-    const feature = state.boundaries.features.find(f => f.properties.id === state.studyArea);
-
-    if (boundaryLayer) { map.removeLayer(boundaryLayer); boundaryLayer = null; }
+    if (!map) return;
     pointsLayer.clearLayers();
 
     if (v.showCompare && v.notRun) return;
 
-    if (feature) {
-      const fillColor = (v.showCompare && v.modelRun) ? riskColor(v.highRiskPct) : '#4f7942';
-      boundaryLayer = L.geoJSON(feature, {
-        style: { color: '#182620', weight: 2, fillColor, fillOpacity: v.showCompare ? 0.45 : 0.12 }
-      }).addTo(map);
-      boundaryLayer.bindPopup(`<strong>${esc(v.areaLabel)}</strong>`);
-      if (lastFittedArea !== state.studyArea) {
-        map.fitBounds(boundaryLayer.getBounds(), { padding: [12, 12] });
-        lastFittedArea = state.studyArea;
+    v.visiblePoints.forEach(pt => {
+      let fillColor = pt.color;
+      let popup = esc(pt.species);
+      if (v.showCompare && v.modelRun) {
+        const risk = v.pointRisk(pt.latlng[0], pt.latlng[1]);
+        fillColor = riskPointColor(risk);
+        popup = esc(pt.species) + (risk !== null ? ' — ' + (risk > 0 ? '−' : '+') + Math.abs(Math.round(risk * 100)) + '% HSI' : '');
       }
-    }
+      L.circleMarker(pt.latlng, {
+        radius: 4, color: '#ffffff', weight: 1, fillColor, fillOpacity: 0.9
+      }).bindPopup(popup).addTo(pointsLayer);
+    });
 
-    if (v.showDistribution) {
-      v.visiblePoints.forEach(pt => {
-        L.circleMarker(pt.latlng, {
-          radius: 4, color: '#ffffff', weight: 1, fillColor: pt.color, fillOpacity: 0.9
-        }).bindPopup(esc(pt.species)).addTo(pointsLayer);
-      });
+    if (!boundsFitted && v.visiblePoints.length) {
+      map.fitBounds(L.latLngBounds(v.visiblePoints.map(p => p.latlng)), { padding: [24, 24] });
+      boundsFitted = true;
     }
   }
 
@@ -875,13 +621,6 @@
   function boot() {
     initMap();
     render();
-    fetch('./assets/study-areas.json')
-      .then(r => {
-        if (!r.ok) throw new Error('Failed to load study area boundaries');
-        return r.json();
-      })
-      .then(geo => { state.boundaries = geo; render(); })
-      .catch(err => console.error(err));
     loadDefaultRasters();
   }
 
