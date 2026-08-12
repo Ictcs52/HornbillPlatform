@@ -41,7 +41,7 @@
   // that have a defined color ramp, so it can be shown as a map overlay.
   function attachRasterImage(raster, layerId) {
     const ramp = RASTER_RAMPS[layerId];
-    if (ramp) raster.imgUrl = renderRasterToDataUrl(raster, ramp);
+    if (ramp) raster.imgUrl = renderRasterToDataUrl(raster, ramp, THAILAND_BOUNDARY);
     return raster;
   }
 
@@ -561,11 +561,11 @@
 
   // --- Leaflet map: a single persistent map instance, updated in place so it
   // never gets torn down by the innerHTML re-renders above. ---
-  let map, pointsLayer, rasterOverlay, boundsFitted = false;
+  let map, pointsLayer, rasterOverlay, boundaryOutline, tileLayer, boundsFitted = false;
 
   function initMap() {
     map = L.map('leafletMap', { scrollWheelZoom: true, preferCanvas: true });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
       maxZoom: 18
     }).addTo(map);
@@ -596,13 +596,18 @@
     if (!map) return;
     pointsLayer.clearLayers();
     if (rasterOverlay) { map.removeLayer(rasterOverlay); rasterOverlay = null; }
+    if (boundaryOutline) { map.removeLayer(boundaryOutline); boundaryOutline = null; }
 
     const rasterTab = v.mapTab === 'rainfall' || v.mapTab === 'temperature';
+    tileLayer.setOpacity(rasterTab ? 0 : 1);
+    document.getElementById('leafletMap').classList.toggle('map-plain-bg', rasterTab);
+
     if (rasterTab) {
       if (v.rasterTabInfo.loaded) {
         const layer = state.layers.find(l => l.id === v.mapTab);
         const [west, south, east, north] = layer.raster.bbox;
-        rasterOverlay = L.imageOverlay(layer.raster.imgUrl, [[south, west], [north, east]], { opacity: 0.85 }).addTo(map);
+        rasterOverlay = L.imageOverlay(layer.raster.imgUrl, [[south, west], [north, east]], { opacity: 0.95 }).addTo(map);
+        boundaryOutline = L.geoJSON(THAILAND_BOUNDARY, { style: { color: '#23281f', weight: 1.2, fill: false } }).addTo(map);
       }
       return;
     }

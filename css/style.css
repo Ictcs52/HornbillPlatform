@@ -130,6 +130,8 @@ a:hover { color: #2f5570; }
 .map-tab { flex: 1; text-align: center; font-size: 12px; font-weight: 600; padding: 9px; border-radius: 7px; cursor: pointer; background: #f0ede1; color: #6b7062; }
 .map-tab.active { background: #4f7942; color: #fff; }
 
+.map-plain-bg { background: #ffffff !important; }
+
 .map-wrap { position: relative; }
 .map-fullscreen-btn {
   position: absolute; top: 8px; right: 8px; z-index: 1200;

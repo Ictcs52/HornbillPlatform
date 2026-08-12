@@ -146,27 +146,61 @@ function rampCss(stops) {
 
 // Rasterizes a parsed GeoTIFF band into a colored PNG data URL for use as a
 // Leaflet image overlay — entirely client-side, no server round trip.
-function renderRasterToDataUrl(raster, ramp) {
-  const { width, height, band, min, max, nodata } = raster;
+// `boundary` is an optional GeoJSON Polygon/MultiPolygon geometry; pixels
+// falling outside it are made transparent, so the raster is clipped to a
+// real coastline instead of showing the full rectangular grid extent.
+function renderRasterToDataUrl(raster, ramp, boundary) {
+  const { width, height, band, min, max, nodata, bbox } = raster;
+  const [west, south, east, north] = bbox;
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d');
   const imgData = ctx.createImageData(width, height);
   const range = (max - min) || 1;
-  for (let i = 0; i < band.length; i++) {
-    const v = band[i];
-    const o = i * 4;
-    if (nodata !== null && v === nodata) {
-      imgData.data[o + 3] = 0;
-      continue;
+  for (let row = 0; row < height; row++) {
+    const lat = north - (row + 0.5) / height * (north - south);
+    for (let col = 0; col < width; col++) {
+      const i = row * width + col;
+      const o = i * 4;
+      const v = band[i];
+      if (nodata !== null && v === nodata) {
+        imgData.data[o + 3] = 0;
+        continue;
+      }
+      if (boundary) {
+        const lon = west + (col + 0.5) / width * (east - west);
+        if (!pointInGeoJSON(lat, lon, boundary)) {
+          imgData.data[o + 3] = 0;
+          continue;
+        }
+      }
+      const [r, g, b] = rampColor(ramp, (v - min) / range);
+      imgData.data[o] = r;
+      imgData.data[o + 1] = g;
+      imgData.data[o + 2] = b;
+      imgData.data[o + 3] = 220;
     }
-    const [r, g, b] = rampColor(ramp, (v - min) / range);
-    imgData.data[o] = r;
-    imgData.data[o + 1] = g;
-    imgData.data[o + 2] = b;
-    imgData.data[o + 3] = 220;
   }
   ctx.putImageData(imgData, 0, 0);
   return canvas.toDataURL();
+}
+
+// Ray-casting point-in-polygon test. `ring` is a GeoJSON linear ring: [[lon,lat], ...].
+function pointInRing(lat, lon, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    const intersect = ((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInGeoJSON(lat, lon, geometry) {
+  if (!geometry) return true;
+  if (geometry.type === 'Polygon') return pointInRing(lat, lon, geometry.coordinates[0]);
+  if (geometry.type === 'MultiPolygon') return geometry.coordinates.some(poly => pointInRing(lat, lon, poly[0]));
+  return true;
 }
