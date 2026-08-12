@@ -2,7 +2,7 @@ const T = {
   en: {
     top: { title: 'Hornbill Habitat Model × GIS', subtitle: 'A prototype tool combining MaxEnt-style modeling steps (samples / environmental layers / settings / output) with an interactive vector map — all on one page. Loads real sample data by default; change settings and click Run, or upload your own files instead.' },
     samples: { title: 'Samples', dropzone: 'Upload CSV (species,lon,lat), or click to upload', useSample: 'Use sample data' },
-    envLayers: { title: 'Environmental Layers', geofabrikNote: 'Road / settlement / river distance layers derived from OpenStreetMap via Geofabrik —' },
+    envLayers: { title: 'Environmental Layers' },
     studyAreaPanel: { title: 'Study Area', recordsLabel: 'occurrence records here' },
     settingsPanel: { title: 'Model Settings', basic: 'Basic', advanced: 'Advanced', output: 'Output', testSplit: '% held out for testing', replicates: 'Number of replicates' },
     mapPanel: { title: 'Prediction Map', distribution: 'Hornbill Distribution', compare: 'Compare Scenario', low: 'Low', high: 'High', denseForest: 'Dense / primary forest', secondaryForest: 'Secondary / mixed forest' },
@@ -32,7 +32,7 @@ const T = {
   th: {
     top: { title: 'แบบจำลองถิ่นอาศัยนกเงือก × GIS', subtitle: 'ต้นแบบเครื่องมือที่รวมขั้นตอนแบบ MaxEnt (samples / environmental layers / settings / output) เข้ากับแผนที่ GIS แบบโต้ตอบในหน้าเดียว — มีข้อมูลตัวอย่างจริงให้พร้อมใช้ ลองเปลี่ยนการตั้งค่าแล้วกด Run ใหม่ หรืออัปโหลดไฟล์จริงแทนได้เลย' },
     samples: { title: 'ข้อมูลจุดพบ (Samples)', dropzone: 'อัปโหลดไฟล์ CSV (species,lon,lat) หรือคลิกเพื่ออัปโหลด', useSample: 'ใช้ข้อมูลตัวอย่าง' },
-    envLayers: { title: 'ชั้นข้อมูลสิ่งแวดล้อม', geofabrikNote: 'ชั้นข้อมูลระยะห่างจากถนน/ชุมชน/แม่น้ำ อ้างอิงจาก OpenStreetMap ผ่าน Geofabrik —' },
+    envLayers: { title: 'ชั้นข้อมูลสิ่งแวดล้อม' },
     studyAreaPanel: { title: 'พื้นที่ศึกษา', recordsLabel: 'ระเบียนที่พบในพื้นที่นี้' },
     settingsPanel: { title: 'ตั้งค่า (Settings)', basic: 'Basic', advanced: 'Advanced', output: 'Output', testSplit: '% ข้อมูลกันไว้ทดสอบ', replicates: 'จำนวนรอบ (replicates)' },
     mapPanel: { title: 'แผนที่ผลการทำนาย', distribution: 'การกระจายพันธุ์นกเงือก', compare: 'เทียบสถานการณ์', low: 'ต่ำ', high: 'สูง', denseForest: 'ป่าดิบชื้น (หนาแน่น)', secondaryForest: 'ป่าเบญจพรรณ/รอง' },

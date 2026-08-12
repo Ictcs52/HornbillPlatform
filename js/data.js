@@ -22,71 +22,41 @@ const STUDY_AREAS = [
 // `keywords` are used to auto-match an uploaded raster filename to a layer
 // (see js/raster.js). `status` starts 'not_loaded' for every layer since it
 // now reflects whether a real raster file has actually been attached.
+// Simplified to the three variables in the student's UI design (temp,
+// rainfall, dust) — the earlier 12-variable topography/vegetation/human
+// disturbance set has been dropped to match.
 const ENV_LAYERS = [
-  { id: 'dem', name: 'Elevation (DEM)', group: 'Topography', resolution: '30m', source: 'SRTM', status: 'not_loaded', keywords: ['dem', 'elevation', 'elev'] },
-  { id: 'slope', name: 'Slope', group: 'Topography', resolution: '30m', source: 'Derived from DEM', status: 'not_loaded', keywords: ['slope'] },
-  { id: 'aspect', name: 'Aspect', group: 'Topography', resolution: '30m', source: 'Derived from DEM', status: 'not_loaded', keywords: ['aspect'] },
-  { id: 'ndvi', name: 'NDVI (Vegetation Index)', group: 'Vegetation', resolution: '100m', source: 'Sentinel-2 composite', status: 'not_loaded', keywords: ['ndvi'] },
-  { id: 'forestcover', name: 'Forest Cover Type', group: 'Vegetation', resolution: '100m', source: 'RFD Forest Cover 2024', status: 'not_loaded', keywords: ['forestcover', 'forest_cover', 'forest_type', 'landcover'] },
-  { id: 'canopy', name: 'Canopy Density', group: 'Vegetation', resolution: '100m', source: 'LiDAR-derived proxy', status: 'not_loaded', keywords: ['canopy'] },
-  { id: 'patchsize', name: 'Forest Patch Size', group: 'Vegetation', resolution: '100m', source: 'Derived from Forest Cover', status: 'not_loaded', keywords: ['patchsize', 'patch_size', 'forestpatch'] },
   { id: 'rainfall', name: 'Mean Annual Rainfall', group: 'Climate', resolution: '2.5km', source: 'TMD Climate Atlas 1991–2020, IDW from 86 stations', status: 'not_loaded', keywords: ['rainfall', 'rain', 'precip'] },
   { id: 'temperature', name: 'Mean Temperature', group: 'Climate', resolution: '2.5km', source: 'TMD Climate Atlas 1991–2020, IDW from 87 stations', status: 'not_loaded', keywords: ['temperature', 'temp'] },
-  { id: 'road', name: 'Distance to Road', group: 'Human Disturbance', resolution: '30m', source: 'OSM (Geofabrik)', status: 'not_loaded', keywords: ['road', 'dist_road', 'distance_to_road'] },
-  { id: 'settlement', name: 'Distance to Settlement', group: 'Human Disturbance', resolution: '30m', source: 'OSM (Geofabrik)', status: 'not_loaded', keywords: ['settlement', 'dist_settlement', 'village'] },
-  { id: 'river', name: 'Distance to River', group: 'Human Disturbance', resolution: '30m', source: 'OSM (Geofabrik)', status: 'not_loaded', keywords: ['river', 'water', 'dist_water', 'stream'] },
   { id: 'dust', name: 'Mean PM2.5 (Dust)', group: 'Climate', resolution: '1km', source: 'User-provided (e.g. PCD, CAMS)', status: 'not_loaded', keywords: ['dust', 'pm25', 'pm2.5', 'pm', 'aqi', 'airquality', 'air_quality'] }
 ];
 
-// Dedicated to the Future Climate Scenario panel: response curve + real unit
-// range for each of the three climate variables it tracks (temp/rainfall/dust),
-// separate from the full model's VARIABLE_CONTRIBUTION/RESPONSE_CURVES above.
-// min/max for temp and rainfall match the real TMD-derived raster range;
-// dust has no real data source yet so its range is a placeholder.
-const CLIMATE_VARIABLES = [
-  { id: 'temp', name: 'Mean Temperature', unit: '°C', min: 20, max: 32, pct: 32,
-    points: [{x:0,y:0.05},{x:0.2,y:0.22},{x:0.35,y:0.5},{x:0.45,y:0.78},{x:0.5,y:0.92},{x:0.55,y:0.85},{x:0.65,y:0.6},{x:0.8,y:0.28},{x:1,y:0.08}] },
-  { id: 'rainfall', name: 'Mean Annual Rainfall', unit: 'mm', min: 800, max: 5000, pct: 34,
-    points: [{x:0,y:0.06},{x:0.15,y:0.14},{x:0.3,y:0.28},{x:0.45,y:0.48},{x:0.6,y:0.68},{x:0.72,y:0.85},{x:0.85,y:0.93},{x:1,y:0.88}] },
-  { id: 'dust', name: 'Mean PM2.5 (Dust)', unit: 'μg/m³', min: 0, max: 150, pct: 34,
-    points: [{x:0,y:0.95},{x:0.15,y:0.86},{x:0.3,y:0.68},{x:0.45,y:0.48},{x:0.6,y:0.3},{x:0.75,y:0.16},{x:1,y:0.05}] }
-];
-
 const VARIABLE_CONTRIBUTION = [
-  { name: 'Forest Patch Size', pct: 24.6 },
-  { name: 'NDVI (Vegetation Index)', pct: 19.8 },
-  { name: 'Canopy Density', pct: 14.2 },
-  { name: 'Elevation', pct: 11.5 },
-  { name: 'Distance to Road', pct: 9.7 },
-  { name: 'Mean Annual Rainfall', pct: 7.4 },
-  { name: 'Distance to River', pct: 5.1 },
-  { name: 'Slope', pct: 4.0 },
-  { name: 'Mean Temperature', pct: 2.3 },
-  { name: 'Distance to Settlement', pct: 1.4 }
+  { name: 'Mean Annual Rainfall', pct: 34 },
+  { name: 'Mean PM2.5 (Dust)', pct: 34 },
+  { name: 'Mean Temperature', pct: 32 }
 ];
 
 // each curve: array of {x,y} where x is normalized 0-1 across the variable's real range, y is predicted suitability 0-1
+// min/max give the real unit range (temp/rainfall match the TMD raster data; dust is a placeholder pending real data)
 const RESPONSE_CURVES = [
-  { id: 'ndvi', variable: 'NDVI (Vegetation Index)', unit: '', range: '0.1 – 0.9',
-    points: [{x:0,y:0.04},{x:0.15,y:0.07},{x:0.3,y:0.14},{x:0.45,y:0.28},{x:0.55,y:0.46},{x:0.65,y:0.64},{x:0.75,y:0.79},{x:0.85,y:0.88},{x:1,y:0.91}] },
-  { id: 'elevation', variable: 'Elevation', unit: 'm', range: '80 – 1,850',
-    points: [{x:0,y:0.08},{x:0.12,y:0.22},{x:0.25,y:0.45},{x:0.35,y:0.68},{x:0.45,y:0.82},{x:0.55,y:0.86},{x:0.65,y:0.74},{x:0.8,y:0.42},{x:0.9,y:0.18},{x:1,y:0.06}] },
-  { id: 'patchsize', variable: 'Forest Patch Size', unit: 'ha', range: '5 – 42,000',
-    points: [{x:0,y:0.03},{x:0.1,y:0.06},{x:0.2,y:0.11},{x:0.35,y:0.24},{x:0.5,y:0.44},{x:0.65,y:0.63},{x:0.8,y:0.79},{x:0.9,y:0.87},{x:1,y:0.92}] },
-  { id: 'road', variable: 'Distance to Road', unit: 'm', range: '0 – 12,400',
-    points: [{x:0,y:0.05},{x:0.1,y:0.13},{x:0.2,y:0.24},{x:0.35,y:0.41},{x:0.5,y:0.58},{x:0.65,y:0.71},{x:0.8,y:0.79},{x:0.9,y:0.82},{x:1,y:0.83}] }
+  { id: 'temp', variable: 'Mean Temperature', unit: '°C', range: '20 – 32', min: 20, max: 32,
+    points: [{x:0,y:0.05},{x:0.2,y:0.22},{x:0.35,y:0.5},{x:0.45,y:0.78},{x:0.5,y:0.92},{x:0.55,y:0.85},{x:0.65,y:0.6},{x:0.8,y:0.28},{x:1,y:0.08}] },
+  { id: 'rainfall', variable: 'Mean Annual Rainfall', unit: 'mm', range: '800 – 5,000', min: 800, max: 5000,
+    points: [{x:0,y:0.06},{x:0.15,y:0.14},{x:0.3,y:0.28},{x:0.45,y:0.48},{x:0.6,y:0.68},{x:0.72,y:0.85},{x:0.85,y:0.93},{x:1,y:0.88}] },
+  { id: 'dust', variable: 'Mean PM2.5 (Dust)', unit: 'μg/m³', range: '0 – 150', min: 0, max: 150,
+    points: [{x:0,y:0.95},{x:0.15,y:0.86},{x:0.3,y:0.68},{x:0.45,y:0.48},{x:0.6,y:0.3},{x:0.75,y:0.16},{x:1,y:0.05}] }
 ];
 
 const PROCESSING_STEPS = [
   'Loading occurrence records for selected species…',
-  'Reprojecting layers to UTM Zone 47N, resampling to 100 m grid…',
-  'Computing Euclidean distance surfaces (road, settlement, river)…',
-  'Extracting environmental values at occurrence points…',
+  'Reprojecting rainfall/temperature/dust layers to a common grid…',
+  'Extracting climate values at occurrence points…',
   'Generating background (pseudo-absence) sample, n = 10,000…',
   'Fitting computational ecological model (regularized logistic response)…',
   'Cross-validating model, 5-fold (75/25 train/test split)…',
   'Predicting habitat suitability surface across study area…',
-  'Simulating forest-loss scenario and recomputing suitability…',
+  'Simulating future climate scenario and recomputing suitability…',
   'Deriving risk classes from suitability change…',
   'Model run complete.'
 ];

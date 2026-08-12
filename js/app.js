@@ -395,7 +395,7 @@
       not_loaded: { label: t.layers.notLoaded, color: '#b5652f' }
     };
 
-    const groupOrder = ['Topography', 'Vegetation', 'Climate', 'Human Disturbance'];
+    const groupOrder = ['Climate'];
     const extraGroups = [...new Set(st.layers.map(l => l.group))].filter(g => !groupOrder.includes(g));
     const layerGroups = [...groupOrder, ...extraGroups].map(g => ({
       name: g, displayName: t.layers.groups[g] || g,
@@ -435,27 +435,23 @@
     const runBtnColor = st.running ? '#8a8f80' : '#4f7942';
     const canRunNote = st.running ? t.simulation.notePipeline : (st.modelRun ? t.simulation.noteComplete : (canRun ? t.simulation.noteReady : t.simulation.noteBlocked));
 
-    const contribBars = VARIABLE_CONTRIBUTION.map(v => ({ ...v, displayName: t.variables[v.name] || v.name, width: Math.round((v.pct / 25) * 100) }));
-    const responseCurves = RESPONSE_CURVES.map(c => ({
-      ...c, displayName: t.variables[c.variable] || c.variable,
-      pathSmall: 'M' + c.points.map(p => (p.x * 130).toFixed(1) + ',' + (60 - p.y * 60).toFixed(1)).join(' L ')
-    }));
+    const contribBars = VARIABLE_CONTRIBUTION.map(v => ({ ...v, displayName: t.variables[v.name] || v.name, width: Math.round((v.pct / 40) * 100) }));
 
     const deltaByVarId = { temp: st.settings.tempDelta, rainfall: st.settings.rainfallDelta, dust: st.settings.dustDelta };
-    const climateVars = CLIMATE_VARIABLES.map(v => {
-      const peakPt = v.points.reduce((best, p) => p.y > best.y ? p : best, v.points[0]);
-      const optimalValue = v.min + peakPt.x * (v.max - v.min);
-      const delta = deltaByVarId[v.id] || 0;
-      const projectedValue = Math.min(v.max, Math.max(v.min, optimalValue + delta));
+    const responseCurves = RESPONSE_CURVES.map(c => {
+      const peakPt = c.points.reduce((best, p) => p.y > best.y ? p : best, c.points[0]);
+      const optimalValue = c.min + peakPt.x * (c.max - c.min);
+      const delta = deltaByVarId[c.id] || 0;
+      const projectedValue = Math.min(c.max, Math.max(c.min, optimalValue + delta));
+      const decimals = c.id === 'rainfall' ? 0 : 1;
       return {
-        ...v, displayName: t.variables[v.name] || v.name,
-        optimalFmt: optimalValue.toFixed(v.id === 'rainfall' ? 0 : 1),
-        projectedFmt: projectedValue.toFixed(v.id === 'rainfall' ? 0 : 1),
-        deltaFmt: (delta > 0 ? '+' : '') + delta.toFixed(v.id === 'rainfall' ? 0 : 1),
-        pathSmall: 'M' + v.points.map(p => (p.x * 130).toFixed(1) + ',' + (60 - p.y * 60).toFixed(1)).join(' L ')
+        ...c, displayName: t.variables[c.variable] || c.variable,
+        optimalFmt: optimalValue.toFixed(decimals),
+        projectedFmt: projectedValue.toFixed(decimals),
+        deltaFmt: (delta > 0 ? '+' : '') + delta.toFixed(decimals),
+        pathSmall: 'M' + c.points.map(p => (p.x * 130).toFixed(1) + ',' + (60 - p.y * 60).toFixed(1)).join(' L ')
       };
     });
-    const climateContribBars = CLIMATE_VARIABLES.map(v => ({ ...v, displayName: t.variables[v.name] || v.name, width: Math.round((v.pct / 40) * 100) }));
 
     const scenarioWord = t.scenarioWord[st.settings.scenario] || st.settings.scenario;
     const exportFormats = ['pdf', 'png', 'geotiff', 'csv'].map(key => ({
@@ -496,7 +492,7 @@
       showDistribution: st.mapTab === 'distribution', showCompare: st.mapTab === 'compare',
       mapTab: st.mapTab,
       visiblePoints, modelRun: st.modelRun, notRun: !st.modelRun, highRiskPct, areaLabel,
-      contribBars, responseCurves, climateVars, climateContribBars
+      contribBars, responseCurves
     };
   }
 
@@ -580,7 +576,6 @@
               </div>`}
           </div>`).join('')}
       `).join('')}
-      <div class="geofabrik-note">${esc(t.envLayers.geofabrikNote)} <a href="https://download.geofabrik.de/asia/thailand.html" target="_blank" rel="noopener">thailand-latest.osm.pbf ↗</a></div>
     </div>`;
 
     html += `<div class="card accent-blue">
@@ -662,6 +657,41 @@
     html += `<div class="card accent-orange">
       <div class="panel-head"><div class="badge badge-orange">06</div><div class="panel-title">${esc(t.results.title)}</div></div>
       ${v.notRun ? `<div class="results-empty">${esc(t.results.noResults)}</div>` : `<div class="results-summary">${esc(t.suitability.mean)} <b style="color:#23281f">0.78</b></div>`}
+      ${v.modelRun ? `
+        <div class="climate-sub-title" style="margin-top:12px">${esc(t.climate.optimalTitle)}</div>
+        <div class="climate-stats">
+          ${v.responseCurves.map(cv => `
+            <div class="climate-stat-row"><div class="climate-stat-label">${esc(cv.displayName)}</div><div class="climate-stat-value">${cv.optimalFmt} ${esc(cv.unit)}</div></div>`).join('')}
+        </div>` : ''}
+    </div>`;
+
+    html += `<div class="card accent-blue">
+      <div class="panel-head"><div class="badge badge-blue">07</div><div class="panel-title">${esc(t.climate.title)}</div></div>
+      <div class="climate-sub-title">${esc(t.climate.projectTitle)}</div>
+      <div class="field-row">
+        <div class="field-label-row" style="margin-bottom:5px"><div>${esc(t.climate.yearLabel)}</div></div>
+        <select data-onchange="setting" data-field="targetYear" data-numeric="true">
+          ${[2035, 2050, 2070].map(y => `<option value="${y}" ${v.settings.targetYear === y ? 'selected' : ''}>${y}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field-row">
+        <div class="field-label-row"><div>${esc(t.climate.tempLabel)}</div><div>${v.settings.tempDelta >= 0 ? '+' : ''}${v.settings.tempDelta} °C</div></div>
+        <input type="range" min="-5" max="5" step="0.5" value="${v.settings.tempDelta}" data-onchange="setting" data-field="tempDelta">
+      </div>
+      <div class="field-row">
+        <div class="field-label-row"><div>${esc(t.climate.rainfallLabel)}</div><div>${v.settings.rainfallDelta >= 0 ? '+' : ''}${v.settings.rainfallDelta} mm</div></div>
+        <input type="range" min="-1000" max="1000" step="50" value="${v.settings.rainfallDelta}" data-onchange="setting" data-field="rainfallDelta">
+      </div>
+      <div class="field-row" style="margin-bottom:0">
+        <div class="field-label-row"><div>${esc(t.climate.dustLabel)}</div><div>${v.settings.dustDelta >= 0 ? '+' : ''}${v.settings.dustDelta} μg/m³</div></div>
+        <input type="range" min="-30" max="30" step="1" value="${v.settings.dustDelta}" data-onchange="setting" data-field="dustDelta">
+      </div>
+      ${v.modelRun ? `
+        <div class="climate-stats" style="margin-top:14px">
+          ${v.responseCurves.map(cv => `
+            <div class="climate-stat-row"><div class="climate-stat-label">${esc(t.climate.projectedLabel)}: ${esc(cv.displayName)}</div><div class="climate-stat-value">${cv.projectedFmt} ${esc(cv.unit)}</div></div>`).join('')}
+        </div>` : ''}
+      <div class="climate-note">${esc(t.climate.note)}</div>
     </div>`;
 
     html += `<div class="card">
@@ -682,7 +712,7 @@
         </div>` : `<div class="results-summary">${esc(t.results.noResults)}</div>`}
     </div>`;
 
-    html += `<div class="card">
+    html += `<div class="card" style="margin-bottom:0">
       <div class="results-head">
         <svg width="13" height="13" viewBox="0 0 13 13"><rect x="0" y="7" width="2.5" height="6" fill="#b5652f"></rect><rect x="4" y="3" width="2.5" height="10" fill="#b5652f"></rect><rect x="8" y="0" width="2.5" height="13" fill="#b5652f"></rect></svg>
         <div class="results-head-title">${esc(t.results.variableImportance)}</div>
@@ -692,65 +722,6 @@
           <div class="contrib-top"><div>${esc(b.displayName)}</div><div style="font-weight:600">${b.pct}%</div></div>
           <div class="contrib-bar-track"><div class="contrib-bar-fill" style="width:${b.width}%"></div></div>
         </div>`).join('') : `<div class="results-summary">${esc(t.results.noResults)}</div>`}
-    </div>`;
-
-    html += `<div class="card accent-blue" style="margin-bottom:0">
-      <div class="panel-head"><div class="badge badge-blue">07</div><div class="panel-title">${esc(t.climate.title)}</div></div>
-
-      <div class="climate-sub-title">${esc(t.climate.optimalTitle)}</div>
-      ${v.modelRun ? `
-        <div class="climate-stats">
-          ${v.climateVars.map(cv => `
-            <div class="climate-stat-row"><div class="climate-stat-label">${esc(cv.displayName)}</div><div class="climate-stat-value">${cv.optimalFmt} ${esc(cv.unit)}</div></div>`).join('')}
-        </div>` : `<div class="results-summary">${esc(t.results.noResults)}</div>`}
-
-      <div class="climate-sub-title" style="margin-top:14px">${esc(t.climate.projectTitle)}</div>
-      <div class="field-row">
-        <div class="field-label-row" style="margin-bottom:5px"><div>${esc(t.climate.yearLabel)}</div></div>
-        <select data-onchange="setting" data-field="targetYear" data-numeric="true">
-          ${[2035, 2050, 2070].map(y => `<option value="${y}" ${v.settings.targetYear === y ? 'selected' : ''}>${y}</option>`).join('')}
-        </select>
-      </div>
-      <div class="field-row">
-        <div class="field-label-row"><div>${esc(t.climate.tempLabel)}</div><div>${v.climateVars.find(c => c.id === 'temp') ? esc(v.climateVars.find(c => c.id === 'temp').deltaFmt) + ' °C' : v.settings.tempDelta + ' °C'}</div></div>
-        <input type="range" min="-5" max="5" step="0.5" value="${v.settings.tempDelta}" data-onchange="setting" data-field="tempDelta">
-      </div>
-      <div class="field-row">
-        <div class="field-label-row"><div>${esc(t.climate.rainfallLabel)}</div><div>${v.settings.rainfallDelta >= 0 ? '+' : ''}${v.settings.rainfallDelta} mm</div></div>
-        <input type="range" min="-1000" max="1000" step="50" value="${v.settings.rainfallDelta}" data-onchange="setting" data-field="rainfallDelta">
-      </div>
-      <div class="field-row" style="margin-bottom:${v.modelRun ? '14px' : '0'}">
-        <div class="field-label-row"><div>${esc(t.climate.dustLabel)}</div><div>${v.settings.dustDelta >= 0 ? '+' : ''}${v.settings.dustDelta} μg/m³</div></div>
-        <input type="range" min="-30" max="30" step="1" value="${v.settings.dustDelta}" data-onchange="setting" data-field="dustDelta">
-      </div>
-
-      ${v.modelRun ? `
-        <div class="climate-stats" style="margin-bottom:14px">
-          ${v.climateVars.map(cv => `
-            <div class="climate-stat-row"><div class="climate-stat-label">${esc(t.climate.projectedLabel)}: ${esc(cv.displayName)}</div><div class="climate-stat-value">${cv.projectedFmt} ${esc(cv.unit)}</div></div>`).join('')}
-        </div>
-
-        <div class="climate-sub-title">${esc(t.climate.responseCurvesTitle)}</div>
-        <div class="curve-grid">
-          ${v.climateVars.map(cv => `
-            <div class="curve-card">
-              <div class="curve-title">${esc(cv.displayName)}</div>
-              <svg viewBox="0 0 130 70" style="width:100%;height:auto;display:block;margin-top:4px">
-                <line x1="0" y1="60" x2="130" y2="60" stroke="#e6e1d2"></line>
-                <path d="${cv.pathSmall}" fill="none" stroke="#3d6a8a" stroke-width="2"></path>
-              </svg>
-            </div>`).join('')}
-        </div>
-
-        <div class="climate-sub-title" style="margin-top:12px">${esc(t.climate.variableImportanceTitle)}</div>
-        ${v.climateContribBars.map(b => `
-          <div class="contrib-row">
-            <div class="contrib-top"><div>${esc(b.displayName)}</div><div style="font-weight:600">${b.pct}%</div></div>
-            <div class="contrib-bar-track"><div class="contrib-bar-fill" style="width:${b.width}%;background:#3d6a8a"></div></div>
-          </div>`).join('')}
-      ` : ''}
-
-      <div class="climate-note">${esc(t.climate.note)}</div>
     </div>`;
 
     document.getElementById('colRightContent').innerHTML = html;
