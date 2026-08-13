@@ -39,11 +39,11 @@ const VARIABLE_CONTRIBUTION = [
 // each curve: array of {x,y} where x is normalized 0-1 across the variable's real range, y is predicted suitability 0-1
 // min/max give the real unit range (temp/rainfall match the TMD raster data; dust is a placeholder pending real data)
 const RESPONSE_CURVES = [
-  { id: 'temp', variable: 'Mean Temperature', unit: '°C', range: '20 – 32', min: 20, max: 32,
+  { id: 'temp', variable: 'Mean Temperature', unit: '°C', range: '20 – 44', min: 20, max: 44,
     points: [{x:0,y:0.05},{x:0.2,y:0.22},{x:0.35,y:0.5},{x:0.45,y:0.78},{x:0.5,y:0.92},{x:0.55,y:0.85},{x:0.65,y:0.6},{x:0.8,y:0.28},{x:1,y:0.08}] },
-  { id: 'rainfall', variable: 'Mean Annual Rainfall', unit: 'mm', range: '800 – 5,000', min: 800, max: 5000,
+  { id: 'rainfall', variable: 'Mean Annual Rainfall', unit: 'mm', range: '800 – 4,000', min: 800, max: 4000,
     points: [{x:0,y:0.06},{x:0.15,y:0.14},{x:0.3,y:0.28},{x:0.45,y:0.48},{x:0.6,y:0.68},{x:0.72,y:0.85},{x:0.85,y:0.93},{x:1,y:0.88}] },
-  { id: 'dust', variable: 'Mean PM2.5 (Dust)', unit: 'μg/m³', range: '0 – 150', min: 0, max: 150,
+  { id: 'dust', variable: 'Mean PM2.5 (Dust)', unit: 'μg/m³', range: '0 – 50', min: 0, max: 50,
     points: [{x:0,y:0.95},{x:0.15,y:0.86},{x:0.3,y:0.68},{x:0.45,y:0.48},{x:0.6,y:0.3},{x:0.75,y:0.16},{x:1,y:0.05}] }
 ];
 

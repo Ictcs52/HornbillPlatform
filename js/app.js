@@ -798,10 +798,16 @@
       const curveOptimal = min + peakPt.x * (max - min);
       const optimalValue = observedMedian !== null ? observedMedian : curveOptimal;
       const delta = deltaByVarId[c.id] || 0;
-      const projectedValue = Math.min(max, Math.max(min, optimalValue + delta));
+      // The scenario input's allowed range always stays at the configured
+      // physical range (e.g. 20-44°C), not the fitted curve's observed data
+      // envelope — so users can dial in an unprecedented value to see how
+      // the model extrapolates, instead of being capped at whatever the
+      // training data happened to cover.
+      const inputMin = c.min, inputMax = c.max;
+      const projectedValue = Math.min(inputMax, Math.max(inputMin, optimalValue + delta));
       const decimals = c.id === 'rainfall' ? 0 : 1;
       return {
-        ...c, min, max, points, displayName: t.variables[c.variable] || c.variable,
+        ...c, min, max, points, inputMin, inputMax, displayName: t.variables[c.variable] || c.variable,
         fitted: !!fitted,
         optimalValue, projectedValue, decimals,
         optimalFmt: optimalValue.toFixed(decimals),
@@ -1013,7 +1019,7 @@
           return `<div class="field-row" style="margin-bottom:${curveId === 'dust' ? '0' : '14px'}">
             <div class="field-label-row"><div>${esc(t.climate[labelKey])}</div></div>
             <div class="numeric-box">
-              <input type="number" step="${step}" min="${c.min}" max="${c.max}" value="${c.projectedValue.toFixed(c.decimals)}" data-onchange="climateAbsolute" data-field="${field}">
+              <input type="number" step="${step}" min="${c.inputMin}" max="${c.inputMax}" value="${c.projectedValue.toFixed(c.decimals)}" data-onchange="climateAbsolute" data-field="${field}">
               <span class="numeric-box-unit">${esc(unit)}</span>
             </div>
           </div>`;
