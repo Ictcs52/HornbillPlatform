@@ -5,7 +5,7 @@ const T = {
     samples: { title: 'Samples', dropzone: 'Upload CSV (species,lon,lat), or click to upload', useSample: 'Use sample data' },
     occurrence: { validate: 'Validate Data', included: 'Included', excluded: 'Excluded' },
     envLayers: { title: 'Environmental Layers' },
-    mapPanel: { title: 'Prediction Map', distribution: 'Hornbill Distribution', rainfallMap: 'Rainfall Map', temperatureMap: 'Temperature Map', forestMap: 'Forest Map', low: 'Low', high: 'High', denseForest: 'Dense / primary forest', secondaryForest: 'Secondary / mixed forest', rasterNotLoaded: 'This raster hasn’t loaded yet — upload a .tif in Environmental Layers, or wait for the default to finish loading.' },
+    mapPanel: { title: 'Prediction Map', distribution: 'Hornbill Distribution', rainfallMap: 'Rainfall Map', temperatureMap: 'Temperature Map', forestMap: 'Forest Map', denseForest: 'Dense / primary forest', secondaryForest: 'Secondary / mixed forest', rasterNotLoaded: 'This raster hasn’t loaded yet — upload a .tif in Environmental Layers, or wait for the default to finish loading.' },
     results: { title: 'Results', responseCurves: 'Response Curves', variableImportance: 'Variable Importance', noResults: 'No results yet — load environmental layers then click Run.' },
     modelStatus: { loading: 'Loading…', running: 'Running…', complete: 'Complete', notrun: 'Not run' },
     layers: { addBtn: '+ Add Variable', ready: 'Ready', notLoaded: 'Not loaded', groups: { Topography: 'Topography', Vegetation: 'Vegetation', Climate: 'Climate', 'Human Disturbance': 'Human Disturbance', 'Land Cover': 'Land Cover' },
@@ -14,7 +14,6 @@ const T = {
       stationDropzone: 'Or upload station point data (.txt/.js — Latitude/Longitude/value per station) to interpolate into a raster' },
     simulation: { running: 'Running…', runAgain: 'Run Again', run: 'Run', notePipeline: 'Processing pipeline in progress', noteComplete: 'Model run complete', noteReady: 'Ready to run', noteBlocked: 'Validate occurrence data and load environmental layers first' },
     suitability: { mean: 'Mean HSI (occurrence pts):', cvAuc: 'Cross-validated AUC (5-fold):', noModel: 'No temp/rainfall/dust layer is loaded — nothing to fit a model on.' },
-    risk: { highArea: 'High-risk occurrence points:', ofArea: 'show declining suitability under this scenario' },
     map: { basemap: 'Basemap', realNote: 'Live OpenStreetMap basemap and real occurrence records from GBIF.', rasterNote: 'Real TMD Climate Atlas data (1991–2020), interpolated from weather stations — see rnd.tmd.go.th/climateatlas.', forestNote: 'Real forest cover data — Hansen Global Forest Change v1.13 (2025): year-2000 tree canopy cover minus mapped loss through 2025.' },
     variables: { 'Forest Patch Size': 'Forest Patch Size', 'NDVI (Vegetation Index)': 'NDVI (Vegetation Index)', 'Canopy Density': 'Canopy Density', 'Elevation': 'Elevation', 'Distance to Road': 'Distance to Road', 'Mean Annual Rainfall': 'Mean Annual Rainfall', 'Distance to River': 'Distance to River', 'Slope': 'Slope', 'Mean Temperature': 'Mean Temperature', 'Distance to Settlement': 'Distance to Settlement', 'Mean PM2.5 (Dust)': 'Mean PM2.5 (Dust)' },
     climate: {
@@ -31,7 +30,7 @@ const T = {
     samples: { title: 'ข้อมูลจุดพบ (Samples)', dropzone: 'อัปโหลดไฟล์ CSV (species,lon,lat) หรือคลิกเพื่ออัปโหลด', useSample: 'ใช้ข้อมูลตัวอย่าง' },
     occurrence: { validate: 'ตรวจสอบข้อมูล', included: 'รวมอยู่', excluded: 'ไม่รวม' },
     envLayers: { title: 'ชั้นข้อมูลสิ่งแวดล้อม' },
-    mapPanel: { title: 'แผนที่ผลการทำนาย', distribution: 'การกระจายพันธุ์นกเงือก', rainfallMap: 'แผนที่ปริมาณฝน', temperatureMap: 'แผนที่อุณหภูมิ', forestMap: 'แผนที่พื้นที่ป่าไม้', low: 'ต่ำ', high: 'สูง', denseForest: 'ป่าดิบชื้น (หนาแน่น)', secondaryForest: 'ป่าเบญจพรรณ/รอง', rasterNotLoaded: 'ยังไม่ได้โหลดราสเตอร์นี้ — อัปโหลดไฟล์ .tif ที่การ์ดชั้นข้อมูลสิ่งแวดล้อม หรือรอให้ค่าเริ่มต้นโหลดเสร็จ' },
+    mapPanel: { title: 'แผนที่ผลการทำนาย', distribution: 'การกระจายพันธุ์นกเงือก', rainfallMap: 'แผนที่ปริมาณฝน', temperatureMap: 'แผนที่อุณหภูมิ', forestMap: 'แผนที่พื้นที่ป่าไม้', denseForest: 'ป่าดิบชื้น (หนาแน่น)', secondaryForest: 'ป่าเบญจพรรณ/รอง', rasterNotLoaded: 'ยังไม่ได้โหลดราสเตอร์นี้ — อัปโหลดไฟล์ .tif ที่การ์ดชั้นข้อมูลสิ่งแวดล้อม หรือรอให้ค่าเริ่มต้นโหลดเสร็จ' },
     results: { title: 'ผลลัพธ์', responseCurves: 'กราฟความสัมพันธ์ตัวแปร (Response Curves)', variableImportance: 'อิทธิพลของตัวแปร (Variable Importance)', noResults: 'ยังไม่มีผลลัพธ์ — โหลดชั้นข้อมูลสิ่งแวดล้อมแล้วกด Run' },
     modelStatus: { loading: 'กำลังโหลด…', running: 'กำลังประมวลผล…', complete: 'เสร็จสมบูรณ์', notrun: 'ยังไม่รัน' },
     layers: { addBtn: '+ เพิ่มตัวแปร', ready: 'พร้อม', notLoaded: 'ยังไม่โหลด', groups: { Topography: 'ภูมิประเทศ', Vegetation: 'พืชพรรณ', Climate: 'ภูมิอากาศ', 'Human Disturbance': 'สิ่งรบกวนจากมนุษย์', 'Land Cover': 'สิ่งปกคลุมดิน' },
@@ -40,7 +39,6 @@ const T = {
       stationDropzone: 'หรืออัปโหลดข้อมูลจุดสถานี (.txt/.js — มี Latitude/Longitude/ค่าตัวแปรต่อสถานี) เพื่อคำนวณเป็นราสเตอร์' },
     simulation: { running: 'กำลังรัน…', runAgain: 'รันอีกครั้ง', run: 'Run', notePipeline: 'กำลังประมวลผลตามขั้นตอน', noteComplete: 'รันแบบจำลองเสร็จแล้ว', noteReady: 'พร้อมรัน', noteBlocked: 'กรุณาตรวจสอบข้อมูลจุดพบและโหลดชั้นข้อมูลสิ่งแวดล้อมก่อน' },
     suitability: { mean: 'ค่าเฉลี่ย HSI (จุดพบ):', cvAuc: 'AUC จากการตรวจสอบไขว้ (5-fold):', noModel: 'ยังไม่ได้โหลดชั้นข้อมูลอุณหภูมิ/ฝน/ฝุ่นเลย จึงไม่มีข้อมูลให้ fit โมเดล' },
-    risk: { highArea: 'จุดพบที่มีความเสี่ยงสูง:', ofArea: 'มีความเหมาะสมลดลงในสถานการณ์นี้' },
     map: { basemap: 'แผนที่ฐาน', realNote: 'แผนที่ฐาน OpenStreetMap จริง และข้อมูลจุดพบนกจริงจาก GBIF', rasterNote: 'ข้อมูลจริงจาก TMD Climate Atlas (พ.ศ. 2534-2563) แทรกค่าจากสถานีตรวจอากาศ — ดูที่ rnd.tmd.go.th/climateatlas', forestNote: 'ข้อมูลพื้นที่ป่าไม้จริง จาก Hansen Global Forest Change v1.13 (2025): พื้นที่ป่าปี 2000 หักลบพื้นที่ที่สูญเสียไปจนถึงปี 2025' },
     variables: { 'Forest Patch Size': 'ขนาดผืนป่าต่อเนื่อง', 'NDVI (Vegetation Index)': 'ดัชนีพืชพรรณ (NDVI)', 'Canopy Density': 'ความหนาแน่นเรือนยอด', 'Elevation': 'ระดับความสูง', 'Distance to Road': 'ระยะห่างจากถนน', 'Mean Annual Rainfall': 'ปริมาณน้ำฝนเฉลี่ยรายปี', 'Distance to River': 'ระยะห่างจากแม่น้ำ', 'Slope': 'ความลาดชัน', 'Mean Temperature': 'อุณหภูมิเฉลี่ย', 'Distance to Settlement': 'ระยะห่างจากชุมชน', 'Mean PM2.5 (Dust)': 'ฝุ่น PM2.5 เฉลี่ย' },
     climate: {

@@ -793,26 +793,6 @@
       };
     });
 
-    // Per-point risk: sample the loaded predictor rasters at the point,
-    // build the "current" and delta-shifted feature rows, and take the
-    // fitted model's predicted-probability drop between them — a real
-    // prediction from the fitted logistic model, not a canned curve lookup.
-    function pointRisk(lat, lon) {
-      if (!fm) return null;
-      const rasters = fm.varIds.map(id => st.layers.find(l => l.id === LAYER_ID_BY_CURVE_ID[id]).raster);
-      const rawCur = rasters.map(r => sampleRasterAt(r, lat, lon));
-      if (rawCur.some(v => v === null)) return null;
-      const rawProj = fm.varIds.map((id, j) => rawCur[j] + (deltaByVarId[id] || 0));
-      const curP = predictProb(fm.model, zRow(fm.stats, rawCur));
-      const projP = predictProb(fm.model, zRow(fm.stats, rawProj));
-      return curP - projP;
-    }
-
-    let highRiskPct = 0;
-    if (fm) {
-      const risks = allOccurrencePoints.map(([lat, lon]) => pointRisk(lat, lon)).filter(r => r !== null);
-      highRiskPct = risks.length ? Math.round(100 * risks.filter(r => r > 0.05).length / risks.length) : 0;
-    }
 
     let rasterTabInfo = null;
     if (st.mapTab === 'rainfall' || st.mapTab === 'temperature' || st.mapTab === 'forest') {
@@ -846,8 +826,8 @@
       runBtnColor, runBtnLabel, canRunNote, running: st.running, runProgress: st.runProgress,
       lastLogLines: st.log.slice(-3),
       mapTab: st.mapTab, rasterTabInfo,
-      visiblePoints, modelRun: st.modelRun, notRun: !st.modelRun, highRiskPct,
-      contribBars, responseCurves, pointRisk,
+      visiblePoints, modelRun: st.modelRun, notRun: !st.modelRun,
+      contribBars, responseCurves,
       meanHSI: fm ? fm.meanHSI : null, cvAUC: fm ? fm.cvAUC : null
     };
   }
@@ -1070,29 +1050,11 @@
     noResultsBox.textContent = t.mapPanel.rasterNotLoaded;
     document.getElementById('leafletMap').style.display = rasterMissing ? 'none' : 'block';
 
-    const gradientEl = document.getElementById('mapGradient');
-    const scaleLabelsEl = document.getElementById('mapScaleLabels');
-    const speciesLegendEl = document.getElementById('mapLegendSpecies');
-    const riskNoteEl = document.getElementById('mapRiskNote');
-
-    // Once the model has run, every tab recolors occurrence points by
-    // projected risk instead of species — so the risk gradient + note
-    // replaces the species legend everywhere, not just on one dedicated tab.
-    if (v.modelRun) {
-      gradientEl.style.display = 'block';
-      gradientEl.style.background = 'linear-gradient(to right,#6ea55a,#d9a441,#c1573a)';
-      scaleLabelsEl.style.display = 'flex';
-      scaleLabelsEl.innerHTML = `<div>${esc(v.t.mapPanel.low)}</div><div>${esc(v.t.mapPanel.high)}</div>`;
-      riskNoteEl.style.display = 'block';
-      riskNoteEl.innerHTML = `${esc(v.t.risk.highArea)} <b style="color:#c1573a">${v.highRiskPct}%</b> ${esc(v.t.risk.ofArea)}`;
-      speciesLegendEl.innerHTML = '';
-    } else {
-      gradientEl.style.display = 'none';
-      scaleLabelsEl.style.display = 'none';
-      riskNoteEl.style.display = 'none';
-      speciesLegendEl.innerHTML = v.legendSpecies.map(l => `
-        <div class="legend-item"><div class="legend-dot" style="background:${l.color}"></div>${esc(l.displayName)}</div>`).join('');
-    }
+    // Occurrence points always keep their species color/legend, before and
+    // after Run — the fitted model's results live in the Results panel
+    // instead of recoloring the map.
+    document.getElementById('mapLegendSpecies').innerHTML = v.legendSpecies.map(l => `
+      <div class="legend-item"><div class="legend-dot" style="background:${l.color}"></div>${esc(l.displayName)}</div>`).join('');
   }
 
   // --- Leaflet map: a single persistent map instance, updated in place so it
@@ -1120,13 +1082,6 @@
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && mapFullscreen) toggleMapFullscreen();
   });
-
-  function riskPointColor(risk) {
-    if (risk === null) return '#8a8f80';
-    if (risk < 0.03) return '#6ea55a';
-    if (risk < 0.12) return '#d9a441';
-    return '#c1573a';
-  }
 
   // On-map classed legend (Leaflet control), styled after the TMD Climate
   // Atlas legend: stacked color bands with the class boundary value at each
@@ -1168,13 +1123,8 @@
     if (classLegendControl) { map.removeControl(classLegendControl); classLegendControl = null; }
   }
 
-  // Once the model has run, every tab colors points by projected risk
-  // instead of species — there's no separate "Compare Scenario" tab anymore.
-  function pointStyle(v, pt) {
-    if (!v.modelRun) return { fillColor: pt.color, popup: esc(pt.species) };
-    const risk = v.pointRisk(pt.latlng[0], pt.latlng[1]);
-    const popup = esc(pt.species) + (risk !== null ? ' — ' + (risk > 0 ? '−' : '+') + Math.abs(Math.round(risk * 100)) + '% HSI' : '');
-    return { fillColor: riskPointColor(risk), popup };
+  function pointStyle(pt) {
+    return { fillColor: pt.color, popup: esc(pt.species) };
   }
 
   function updateLeafletLayers(v) {
@@ -1206,7 +1156,7 @@
         removeClassLegend();
       }
       v.visiblePoints.forEach(pt => {
-        const { fillColor, popup } = pointStyle(v, pt);
+        const { fillColor, popup } = pointStyle(pt);
         L.circleMarker(pt.latlng, {
           radius: 3, color: '#ffffff', weight: 1, fillColor, fillOpacity: 0.9
         }).bindPopup(popup).addTo(pointsLayer);
@@ -1222,7 +1172,7 @@
     boundaryOutline = L.geoJSON(outlineSource, { style: { color: '#3a4033', weight: 0.7, opacity: 0.5, fill: false } }).addTo(map);
 
     v.visiblePoints.forEach(pt => {
-      const { fillColor, popup } = pointStyle(v, pt);
+      const { fillColor, popup } = pointStyle(pt);
       L.circleMarker(pt.latlng, {
         radius: 4, color: '#ffffff', weight: 1, fillColor, fillOpacity: 0.9
       }).bindPopup(popup).addTo(pointsLayer);
