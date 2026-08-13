@@ -169,14 +169,46 @@ a:hover { color: #2f5570; }
 .map-tab { flex: 1; text-align: center; font-size: 12px; font-weight: 600; padding: 9px; border-radius: 7px; cursor: pointer; background: #f0ede1; color: #6b7062; }
 .map-tab.active { background: linear-gradient(135deg, #4f7942, #1f7a8a); color: #fff; }
 
+.province-label {
+  background: none; border: none; box-shadow: none; padding: 0;
+  font-size: 8px; font-weight: 600; color: #23281f; white-space: nowrap;
+  text-shadow: 0 0 2px #ffffff, 0 0 2px #ffffff, 0 0 2px #ffffff;
+}
+.province-label::before { display: none; }
+
+.raster-legend-control { margin: 8px !important; }
+.raster-legend {
+  background: #ffffff; padding: 8px 16px 12px 8px; border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3); font-family: inherit;
+}
+.raster-legend-title { font-size: 11.5px; font-weight: 700; color: #23281f; margin-bottom: 6px; }
+.raster-legend-list { display: flex; flex-direction: column; width: 20px; }
+.raster-legend-row { position: relative; height: 13px; }
+.raster-legend-row-zero { height: 0; }
+.raster-legend-num {
+  position: absolute; left: 100%; top: 0; transform: translate(5px, -50%);
+  font-size: 9.5px; color: #23281f; white-space: nowrap; line-height: 1;
+}
 
 .map-wrap { position: relative; }
+.map-fullscreen-btn {
+  position: absolute; top: 8px; right: 8px; z-index: 1200;
+  width: 32px; height: 32px; border: 1px solid #d8d2bf; border-radius: 6px;
+  background: #ffffff; color: #23281f; font-size: 15px; line-height: 1; cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+.map-fullscreen-btn:hover { background: #f2ede3; }
+.map-wrap.fullscreen {
+  position: fixed; inset: 0; z-index: 9999; background: #ffffff; padding: 12px;
+}
+.map-wrap.fullscreen #leafletMap { height: 100% !important; border-radius: 0; }
 .map-note { font-size: 10px; color: #8a8f80; margin-top: 8px; line-height: 1.5; font-style: italic; }
 .map-gradient { height: 12px; border-radius: 4px; margin-top: 12px; }
 .map-scale-labels { display: flex; justify-content: space-between; font-size: 11px; color: #8a8f80; margin-top: 4px; }
 .map-legend-species { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
 .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #6b7062; }
 .legend-dot { width: 7px; height: 7px; border-radius: 50%; }
+.no-results { padding: 60px 20px; text-align: center; color: #8a8f80; background: #eae3d0; border-radius: 6px; }
 
 .results-empty { font-size: 12px; color: #8a8f80; line-height: 1.6; }
 .results-summary { font-size: 11.5px; color: #6b7062; line-height: 1.6; }

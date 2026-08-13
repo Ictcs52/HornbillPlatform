@@ -3,6 +3,7 @@
 
   const state = {
     lang: 'en',
+    mapTab: 'distribution',
     forestRiskTab: 'rainfall',
     speciesSel: { great: true, wreathed: true, rufous: true, rhino: true, helmeted: true },
     layers: ENV_LAYERS.map(l => ({ ...l })),
@@ -191,6 +192,7 @@
   }
   function toggleLeftPanel() { state.leftCollapsed = !state.leftCollapsed; render(); }
   function toggleSection(id) { state.collapsedSections[id] = !state.collapsedSections[id]; render(); }
+  function setMapTab(tab) { state.mapTab = tab; render(); }
   function toggleRightPanel() { state.rightCollapsed = !state.rightCollapsed; render(); }
   function updateLayerField(id, field, value) {
     state.layers = state.layers.map(l => l.id === id ? { ...l, [field]: value } : l);
@@ -362,10 +364,10 @@
   }
 
   const ACTIONS = {
-    setLang, setForestRiskTab, toggleSpecies, validateData, useSampleData,
+    setLang, setMapTab, setForestRiskTab, toggleSpecies, validateData, useSampleData,
     removeLayer, removeRasterFromLayer,
     validateStationData, useSampleRaster,
-    addLayer, runModel,
+    addLayer, runModel, toggleMapFullscreen,
     dismissUnmatchedFile, toggleLeftPanel, toggleRightPanel, toggleSection
   };
 
@@ -904,6 +906,12 @@
     const forestLayer = st.layers.find(l => l.id === 'forest');
     const forestRiskLoaded = !!(forestLayer && forestLayer.raster && forestLayer.raster.imgUrl);
 
+    let rasterTabInfo = null;
+    if (st.mapTab === 'rainfall' || st.mapTab === 'temperature' || st.mapTab === 'dust') {
+      const layer = st.layers.find(l => l.id === st.mapTab);
+      rasterTabInfo = { loaded: !!(layer && layer.raster && layer.raster.imgUrl) };
+    }
+
     const uploads = st.uploads.map(u => {
       let statusLabel;
       let color;
@@ -929,6 +937,7 @@
       settings: st.settings,
       runBtnColor, runBtnLabel, canRunNote, running: st.running, runProgress: st.runProgress,
       lastLogLines: st.log.slice(-3),
+      mapTab: st.mapTab, rasterTabInfo,
       visiblePoints, modelRun: st.modelRun, notRun: !st.modelRun,
       contribBars, responseCurves,
       meanHSI: fm ? fm.meanHSI : null, cvAUC: fm ? fm.cvAUC : null, projectedMeanHSI,
@@ -1166,6 +1175,162 @@
     document.getElementById('colRightContent').innerHTML = html;
   }
 
+  function renderMapChrome(v) {
+    const t = v.t;
+    const rasterTab = v.mapTab === 'rainfall' || v.mapTab === 'temperature' || v.mapTab === 'dust';
+
+    document.getElementById('mapPanelTitle').textContent = t.mapPanel.title;
+    document.getElementById('mapTabDist').textContent = t.mapPanel.distribution;
+    document.getElementById('mapTabDist').classList.toggle('active', v.mapTab === 'distribution');
+    document.getElementById('mapTabRainfall').textContent = t.mapPanel.rainfallMap;
+    document.getElementById('mapTabRainfall').classList.toggle('active', v.mapTab === 'rainfall');
+    document.getElementById('mapTabTemperature').textContent = t.mapPanel.temperatureMap;
+    document.getElementById('mapTabTemperature').classList.toggle('active', v.mapTab === 'temperature');
+    document.getElementById('mapTabDust').textContent = t.mapPanel.dustMap;
+    document.getElementById('mapTabDust').classList.toggle('active', v.mapTab === 'dust');
+    document.getElementById('mapRealNote').textContent = v.mapTab === 'dust' ? t.map.dustNote
+      : (rasterTab ? t.map.rasterNote : t.map.realNote);
+
+    const noResultsBox = document.getElementById('noResultsBox');
+    const rasterMissing = rasterTab && !v.rasterTabInfo.loaded;
+    noResultsBox.style.display = rasterMissing ? 'block' : 'none';
+    noResultsBox.textContent = t.mapPanel.rasterNotLoaded;
+    document.getElementById('leafletMap').style.display = rasterMissing ? 'none' : 'block';
+
+    // Occurrence points always keep their species color/legend, before and
+    // after Run — the fitted model's results live in the Results panel
+    // instead of recoloring the map.
+    document.getElementById('mapLegendSpecies').innerHTML = v.legendSpecies.map(l => `
+      <div class="legend-item"><div class="legend-dot" style="background:${l.color}"></div>${esc(l.displayName)}</div>`).join('');
+  }
+
+  // --- Leaflet map: a single persistent map instance, updated in place so it
+  // never gets torn down by the innerHTML re-renders above. ---
+  let map, pointsLayer, rasterOverlay, boundaryOutline, boundsFitted = false;
+
+  function initMap() {
+    map = L.map('leafletMap', { scrollWheelZoom: true, preferCanvas: true });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+      maxZoom: 18
+    }).addTo(map);
+    pointsLayer = L.layerGroup().addTo(map);
+  }
+
+  let mapFullscreen = false;
+  function toggleMapFullscreen() {
+    mapFullscreen = !mapFullscreen;
+    document.getElementById('mapWrap').classList.toggle('fullscreen', mapFullscreen);
+    document.getElementById('mapFullscreenBtn').textContent = mapFullscreen ? '⤡' : '⤢';
+    document.getElementById('mapFullscreenBtn').title = mapFullscreen ? 'Exit fullscreen' : 'Toggle fullscreen';
+    setTimeout(() => { if (map) map.invalidateSize(); }, 260);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && mapFullscreen) toggleMapFullscreen();
+  });
+
+  // On-map classed legend (Leaflet control), styled after the TMD Climate
+  // Atlas legend: stacked color bands with the class boundary value at each
+  // band's top edge, high value at top down to zero at the bottom.
+  let classLegendControl = null;
+
+  function buildClassLegendHtml(layerId, isTh) {
+    const ramp = RASTER_RAMPS[layerId];
+    const cfg = RASTER_CLASSES[layerId];
+    const displayBreaks = cfg.legendBreaks || cfg.breaks;
+    const title = layerId === 'rainfall' ? (isTh ? 'ปริมาณฝน' : 'Rainfall')
+      : layerId === 'dust' ? (isTh ? 'ฝุ่น PM2.5' : 'PM2.5')
+      : (isTh ? 'อุณหภูมิ' : 'Temperature');
+    let rows = '';
+    for (let i = displayBreaks.length - 1; i >= 1; i--) {
+      const lo = displayBreaks[i - 1], hi = displayBreaks[i];
+      const [r, g, b] = classColor(ramp, cfg.breaks, (lo + hi) / 2);
+      rows += `<div class="raster-legend-row" style="background:rgb(${r},${g},${b})"><span class="raster-legend-num">${hi}</span></div>`;
+    }
+    rows += `<div class="raster-legend-row raster-legend-row-zero"><span class="raster-legend-num">${displayBreaks[0]}</span></div>`;
+    return `<div class="raster-legend"><div class="raster-legend-title">${esc(title)} (${esc(cfg.unit)})</div><div class="raster-legend-list">${rows}</div></div>`;
+  }
+
+  function updateClassLegend(layerId, isTh) {
+    if (!classLegendControl) {
+      classLegendControl = L.control({ position: 'bottomright' });
+      classLegendControl.onAdd = function () {
+        const div = L.DomUtil.create('div', 'raster-legend-control');
+        L.DomEvent.disableClickPropagation(div);
+        L.DomEvent.disableScrollPropagation(div);
+        return div;
+      };
+      classLegendControl.addTo(map);
+    }
+    classLegendControl.getContainer().innerHTML = buildClassLegendHtml(layerId, isTh);
+  }
+
+  function removeClassLegend() {
+    if (classLegendControl) { map.removeControl(classLegendControl); classLegendControl = null; }
+  }
+
+  function pointStyle(pt) {
+    return { fillColor: pt.color, popup: esc(pt.species) };
+  }
+
+  function updateLeafletLayers(v) {
+    if (!map) return;
+    pointsLayer.clearLayers();
+    if (rasterOverlay) { map.removeLayer(rasterOverlay); rasterOverlay = null; }
+    if (boundaryOutline) { map.removeLayer(boundaryOutline); boundaryOutline = null; }
+
+    const rasterTab = v.mapTab === 'rainfall' || v.mapTab === 'temperature' || v.mapTab === 'dust';
+
+    if (rasterTab) {
+      if (v.rasterTabInfo.loaded) {
+        const layer = state.layers.find(l => l.id === v.mapTab);
+        const [west, south, east, north] = layer.raster.bbox;
+        rasterOverlay = L.imageOverlay(layer.raster.imgUrl, [[south, west], [north, east]], { opacity: 0.7 }).addTo(map);
+        if (state.provinceBoundaries) {
+          boundaryOutline = L.geoJSON(state.provinceBoundaries, {
+            style: { color: '#23281f', weight: 0.7, opacity: 0.55, fill: false },
+            onEachFeature: (feature, featureLayer) => {
+              const name = v.isTh ? feature.properties.th : feature.properties.en;
+              featureLayer.bindTooltip(name, { permanent: true, direction: 'center', className: 'province-label' });
+            }
+          }).addTo(map);
+        } else {
+          boundaryOutline = L.geoJSON(THAILAND_BOUNDARY, { style: { color: '#23281f', weight: 1.2, fill: false } }).addTo(map);
+        }
+        updateClassLegend(v.mapTab, v.isTh);
+      } else {
+        removeClassLegend();
+      }
+      v.visiblePoints.forEach(pt => {
+        const { fillColor, popup } = pointStyle(pt);
+        L.circleMarker(pt.latlng, {
+          radius: 3, color: '#ffffff', weight: 1, fillColor, fillOpacity: 0.9
+        }).bindPopup(popup).addTo(pointsLayer);
+      });
+      return;
+    }
+    removeClassLegend();
+
+    // Distribution tab: a light Thailand outline for context, on top of the
+    // real OSM basemap (no permanent labels — the basemap already carries
+    // place names at this zoom).
+    const outlineSource = state.provinceBoundaries || THAILAND_BOUNDARY;
+    boundaryOutline = L.geoJSON(outlineSource, { style: { color: '#3a4033', weight: 0.7, opacity: 0.5, fill: false } }).addTo(map);
+
+    v.visiblePoints.forEach(pt => {
+      const { fillColor, popup } = pointStyle(pt);
+      L.circleMarker(pt.latlng, {
+        radius: 4, color: '#ffffff', weight: 1, fillColor, fillOpacity: 0.9
+      }).bindPopup(popup).addTo(pointsLayer);
+    });
+
+    if (!boundsFitted && v.visiblePoints.length) {
+      map.fitBounds(L.latLngBounds(v.visiblePoints.map(p => p.latlng)), { padding: [24, 24] });
+      boundsFitted = true;
+    }
+  }
+
   // Forest cover as a fixed basemap across 3 tabs (one per climate
   // variable), with occurrence points colored by that single variable's
   // predicted risk — lets a viewer see whether at-risk points sit in
@@ -1201,10 +1366,9 @@
     }
   }
 
-  // --- Leaflet map: forest cover as a fixed basemap, points colored by
-  // whichever single climate variable's risk is selected. A single
-  // persistent instance, updated in place so it never gets torn down by
-  // the innerHTML re-renders above. ---
+  // --- Second Leaflet map: forest cover as a fixed basemap, points colored
+  // by whichever single climate variable's risk is selected. Separate
+  // persistent instance so it doesn't interfere with the main map above. ---
   let forestRiskMap, forestRiskPointsLayer, forestRiskRasterOverlay, forestRiskBoundary, forestRiskBoundsFitted = false;
 
   function initForestRiskMap() {
@@ -1258,8 +1422,10 @@
     renderTop(v);
     renderLeftCol(v);
     renderRightCol(v);
+    renderMapChrome(v);
     renderForestRiskChrome(v);
     renderCollapse();
+    updateLeafletLayers(v);
     updateForestRiskMap(v);
   }
 
@@ -1287,6 +1453,7 @@
   }
 
   function boot() {
+    initMap();
     initForestRiskMap();
     render();
     loadDefaultRasters();
