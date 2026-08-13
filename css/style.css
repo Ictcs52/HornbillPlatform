@@ -164,7 +164,11 @@ a:hover { color: #2f5570; }
 .run-log-bar > div { height: 100%; background: #8fd17a; }
 .run-log-lines { font-family: ui-monospace, monospace; font-size: 10.5px; color: #c8d6c4; max-height: 90px; overflow: hidden; }
 
-.map-card-sticky { position: sticky; top: 20px; }
+/* Not sticky: #colMap now stacks two map cards, and a sticky element's
+   release boundary is its parent's box — since that parent (#colMap)
+   spans both cards, a sticky first card stays pinned across the second
+   card's whole height and visually covers it while scrolling. */
+.map-card-sticky { position: static; }
 .map-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
 .map-tab { flex: 1; text-align: center; font-size: 12px; font-weight: 600; padding: 9px; border-radius: 7px; cursor: pointer; background: #f0ede1; color: #6b7062; }
 .map-tab.active { background: linear-gradient(135deg, #4f7942, #1f7a8a); color: #fff; }
