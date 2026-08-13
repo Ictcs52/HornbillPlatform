@@ -35,48 +35,27 @@
     </div>
 
     <div id="colMap">
-      <div class="card map-card">
-        <div class="panel-head">
-          <div class="badge badge-gold">04</div>
-          <div class="panel-title" id="mapPanelTitle"></div>
-        </div>
-        <div class="map-tabs">
-          <div class="map-tab" id="mapTabDist" data-action="setMapTab" data-id="distribution"></div>
-          <div class="map-tab" id="mapTabRainfall" data-action="setMapTab" data-id="rainfall"></div>
-          <div class="map-tab" id="mapTabTemperature" data-action="setMapTab" data-id="temperature"></div>
-          <div class="map-tab" id="mapTabForest" data-action="setMapTab" data-id="forest"></div>
-          <div class="map-tab" id="mapTabDust" data-action="setMapTab" data-id="dust"></div>
-        </div>
+      <div class="map-card-sticky">
+        <div class="card map-card">
+          <div class="panel-head">
+            <div class="badge badge-gold">04</div>
+            <div class="panel-title" id="forestRiskPanelTitle"></div>
+          </div>
+          <div class="map-tabs">
+            <div class="map-tab" id="riskTabRainfall" data-action="setForestRiskTab" data-id="rainfall"></div>
+            <div class="map-tab" id="riskTabTemperature" data-action="setForestRiskTab" data-id="temp"></div>
+            <div class="map-tab" id="riskTabDust" data-action="setForestRiskTab" data-id="dust"></div>
+          </div>
 
-        <div id="mapWrap" class="map-wrap">
-          <div id="leafletMap" style="width:100%;height:420px;border-radius:6px;background:#eae3d0"></div>
-          <button id="mapFullscreenBtn" type="button" class="map-fullscreen-btn" data-action="toggleMapFullscreen" title="Toggle fullscreen">⤢</button>
-        </div>
-        <div id="noResultsBox" class="no-results" style="display:none"></div>
+          <div id="forestRiskWrap" class="map-wrap">
+            <div id="forestRiskMap" style="width:100%;height:420px;border-radius:6px;background:#eae3d0"></div>
+          </div>
 
-        <div id="mapLegendSpecies" class="map-legend-species"></div>
-        <div class="map-note" id="mapRealNote"></div>
-      </div>
-
-      <div class="card">
-        <div class="panel-head">
-          <div class="badge badge-gold">04</div>
-          <div class="panel-title" id="forestRiskPanelTitle"></div>
+          <div id="forestRiskGradient" class="map-gradient" style="display:none"></div>
+          <div id="forestRiskScaleLabels" class="map-scale-labels" style="display:none"></div>
+          <div id="forestRiskLegendSpecies" class="map-legend-species"></div>
+          <div class="map-note" id="forestRiskNote"></div>
         </div>
-        <div class="map-tabs">
-          <div class="map-tab" id="riskTabRainfall" data-action="setForestRiskTab" data-id="rainfall"></div>
-          <div class="map-tab" id="riskTabTemperature" data-action="setForestRiskTab" data-id="temp"></div>
-          <div class="map-tab" id="riskTabDust" data-action="setForestRiskTab" data-id="dust"></div>
-        </div>
-
-        <div id="forestRiskWrap" class="map-wrap">
-          <div id="forestRiskMap" style="width:100%;height:420px;border-radius:6px;background:#eae3d0"></div>
-        </div>
-
-        <div id="forestRiskGradient" class="map-gradient" style="display:none"></div>
-        <div id="forestRiskScaleLabels" class="map-scale-labels" style="display:none"></div>
-        <div id="forestRiskLegendSpecies" class="map-legend-species"></div>
-        <div class="map-note" id="forestRiskNote"></div>
       </div>
     </div>
 
