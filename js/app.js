@@ -7,7 +7,7 @@
     speciesSel: { great: true, wreathed: true, rufous: true, rhino: true, helmeted: true },
     layers: ENV_LAYERS.map(l => ({ ...l })),
     settings: {
-      targetYear: 2030,
+      targetYear: 2025,
       // Each target year keeps its own temp/rainfall/dust deltas, entered
       // and stored independently — switching years recalls that year's
       // values instead of sharing one set across all of them.
