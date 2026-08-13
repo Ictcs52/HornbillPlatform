@@ -1,6 +1,23 @@
 // Per-species results rendered inside the original Results column.
 (function(){
   'use strict';
+  // Keep the original student UI, but make the lower risk-map terminology match
+  // what the model actually represents: habitat suitability risk by each factor.
+  if (typeof T !== 'undefined') {
+    if (T.en && T.en.mapPanel) {
+      T.en.mapPanel.forestRiskTitle = 'Forest Cover × Habitat Risk';
+      T.en.mapPanel.riskRainfall = 'Rainfall Risk';
+      T.en.mapPanel.riskTemperature = 'Temperature Risk';
+      T.en.mapPanel.riskDust = 'PM2.5 Risk';
+    }
+    if (T.th && T.th.mapPanel) {
+      T.th.mapPanel.forestRiskTitle = 'พื้นที่ป่าไม้ × ความเสี่ยงต่อถิ่นอาศัย';
+      T.th.mapPanel.riskRainfall = 'ความเสี่ยงจากปริมาณฝน';
+      T.th.mapPanel.riskTemperature = 'ความเสี่ยงจากอุณหภูมิ';
+      T.th.mapPanel.riskDust = 'ความเสี่ยงจาก PM2.5';
+    }
+  }
+
   const C={seed:2569,thin:.025,bg:900,min:20,lr:.22,it:180,l2:.025};
   const S={rasters:null,models:[],ran:false,running:false,baseline:{temp:null,rainfall:null,dust:null},timer:null};
   function hash(s){let h=2166136261>>>0;for(const c of String(s)){h^=c.charCodeAt(0);h=Math.imul(h,16777619);}return h>>>0;}
