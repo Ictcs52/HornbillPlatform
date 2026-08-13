@@ -140,6 +140,7 @@ a:hover { color: #2f5570; }
 .raster-info-row { color: #8a8f80; }
 .raster-info-row a { color: #4f7942; }
 .raster-warning { color: #c1573a; font-weight: 600; margin-top: 3px; }
+.extrapolation-warning { color: #c1573a; font-size: 10.5px; font-weight: 600; margin-top: 5px; line-height: 1.4; }
 .raster-change { color: #4f7942; font-weight: 600; cursor: pointer; margin-top: 4px; }
 
 .field-row { margin-bottom: 14px; }

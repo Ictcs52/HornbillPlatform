@@ -24,6 +24,7 @@ const T = {
       tempLabel: 'Temperature change', rainfallLabel: 'Rainfall change', dustLabel: 'Dust (PM2.5) change',
       responseCurvesTitle: 'Response Curves (climate)', variableImportanceTitle: 'Variable Importance (climate)',
       projectedHSI: 'Projected Mean HSI, year', vsCurrent: 'vs. current',
+      extrapolationWarning: '⚠ This value is outside the range the fitted model actually saw in the data — the result is a straight-line extrapolation, not a validated prediction.',
       note: 'Each target year keeps its own temp/rainfall/dust values — switch years above to enter or review that year’s scenario. Response curves come from the same fitted model, evaluated at each year’s shifted values.'
     }
   },
@@ -52,6 +53,7 @@ const T = {
       tempLabel: 'อุณหภูมิเปลี่ยนแปลง', rainfallLabel: 'ปริมาณฝนเปลี่ยนแปลง', dustLabel: 'ฝุ่น (PM2.5) เปลี่ยนแปลง',
       responseCurvesTitle: 'กราฟความสัมพันธ์ (ภูมิอากาศ)', variableImportanceTitle: 'อิทธิพลของตัวแปร (ภูมิอากาศ)',
       projectedHSI: 'Mean HSI ที่คาดการณ์ ปี', vsCurrent: 'เทียบกับปัจจุบัน',
+      extrapolationWarning: '⚠ ค่านี้เกินช่วงข้อมูลจริงที่โมเดลเคยเห็นตอน fit — ผลลัพธ์เป็นการลากเส้นแนวโน้มต่อ (extrapolation) ไม่ใช่คำทำนายที่ผ่านการยืนยันด้วยข้อมูลจริง',
       note: 'แต่ละปีเป้าหมายเก็บค่าอุณหภูมิ/ฝน/ฝุ่นของตัวเองแยกกัน — สลับปีด้านบนเพื่อกรอกหรือดูค่าของปีนั้น กราฟความสัมพันธ์มาจากโมเดลเดียวกันที่ fit ไว้ คำนวณด้วยค่าที่เปลี่ยนไปของแต่ละปี'
     }
   }

@@ -806,9 +806,14 @@
       const inputMin = c.min, inputMax = c.max;
       const projectedValue = Math.min(inputMax, Math.max(inputMin, optimalValue + delta));
       const decimals = c.id === 'rainfall' ? 0 : 1;
+      // Flags a value outside the range the fitted model actually saw in
+      // the data — the response curve there is a straight-line
+      // extrapolation of the fitted trend, not something learned from real
+      // observations, so it shouldn't be read as a validated prediction.
+      const isExtrapolated = !!fitted && (projectedValue < min || projectedValue > max);
       return {
         ...c, min, max, points, inputMin, inputMax, displayName: t.variables[c.variable] || c.variable,
-        fitted: !!fitted,
+        fitted: !!fitted, isExtrapolated,
         optimalValue, projectedValue, decimals,
         optimalFmt: optimalValue.toFixed(decimals),
         projectedFmt: projectedValue.toFixed(decimals),
@@ -1016,12 +1021,13 @@
         const curveById = Object.fromEntries(v.responseCurves.map(c => [c.id, c]));
         const box = (labelKey, field, curveId, unit, step) => {
           const c = curveById[curveId];
-          return `<div class="field-row" style="margin-bottom:${curveId === 'dust' ? '0' : '14px'}">
+          return `<div class="field-row" style="margin-bottom:${curveId === 'dust' && !c.isExtrapolated ? '0' : '14px'}">
             <div class="field-label-row"><div>${esc(t.climate[labelKey])}</div></div>
             <div class="numeric-box">
               <input type="number" step="${step}" min="${c.inputMin}" max="${c.inputMax}" value="${c.projectedValue.toFixed(c.decimals)}" data-onchange="climateAbsolute" data-field="${field}">
               <span class="numeric-box-unit">${esc(unit)}</span>
             </div>
+            ${c.isExtrapolated ? `<div class="extrapolation-warning">${esc(t.climate.extrapolationWarning)}</div>` : ''}
           </div>`;
         };
         return box('tempLabel', 'tempDelta', 'temp', '°C', '0.5')
