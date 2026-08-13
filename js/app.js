@@ -31,6 +31,7 @@
     unmatchedRasterFiles: [],
     leftCollapsed: false,
     rightCollapsed: false,
+    collapsedSections: { samples: false, envLayers: false, climate: false },
     provinceBoundaries: null,
     thailandOutline: null
   };
@@ -189,6 +190,7 @@
     e.target.value = '';
   }
   function toggleLeftPanel() { state.leftCollapsed = !state.leftCollapsed; render(); }
+  function toggleSection(id) { state.collapsedSections[id] = !state.collapsedSections[id]; render(); }
   function toggleRightPanel() { state.rightCollapsed = !state.rightCollapsed; render(); }
   function updateLayerField(id, field, value) {
     state.layers = state.layers.map(l => l.id === id ? { ...l, [field]: value } : l);
@@ -364,7 +366,7 @@
     removeLayer, removeRasterFromLayer,
     validateStationData, useSampleRaster,
     addLayer, runModel,
-    dismissUnmatchedFile, toggleLeftPanel, toggleRightPanel
+    dismissUnmatchedFile, toggleLeftPanel, toggleRightPanel, toggleSection
   };
 
   document.addEventListener('click', (e) => {
@@ -931,7 +933,8 @@
       contribBars, responseCurves,
       meanHSI: fm ? fm.meanHSI : null, cvAUC: fm ? fm.cvAUC : null, projectedMeanHSI,
       currentPopulation, projectedPopulation,
-      forestRiskTab: st.forestRiskTab, forestRiskUsable, forestRiskPoints, forestRiskLoaded
+      forestRiskTab: st.forestRiskTab, forestRiskUsable, forestRiskPoints, forestRiskLoaded,
+      collapsedSections: st.collapsedSections
     };
   }
 
@@ -950,7 +953,11 @@
     let html = '';
 
     html += `<div class="card accent-green">
-      <div class="panel-head"><div class="badge badge-green">01</div><div class="panel-title">${esc(t.samples.title)}</div></div>
+      <div class="panel-head" data-action="toggleSection" data-id="samples" style="cursor:pointer">
+        <div class="badge badge-green">01</div><div class="panel-title">${esc(t.samples.title)}</div>
+        <div class="collapse-chevron">${v.collapsedSections.samples ? '▸' : '▾'}</div>
+      </div>
+      ${v.collapsedSections.samples ? '' : `
       ${v.speciesCards.map(sp => `
         <div class="species-row" style="border-color:${sp.border};opacity:${sp.op}" data-action="toggleSpecies" data-id="${sp.id}">
           <div class="species-dot" style="background:${sp.color}"></div>
@@ -968,11 +975,15 @@
         <div class="btn btn-green" data-action="validateData">${esc(t.occurrence.validate)}</div>
       </div>` : ''}
       ${v.dataValidated ? `<div class="valid-note">${esc(v.validNote)}</div>` : ''}
+      `}
     </div>`;
 
     html += `<div class="card accent-brown">
-      <div class="panel-head"><div class="badge badge-brown">02</div><div class="panel-title">${esc(t.envLayers.title)}</div></div>
-
+      <div class="panel-head" data-action="toggleSection" data-id="envLayers" style="cursor:pointer">
+        <div class="badge badge-brown">02</div><div class="panel-title">${esc(t.envLayers.title)}</div>
+        <div class="collapse-chevron">${v.collapsedSections.envLayers ? '▸' : '▾'}</div>
+      </div>
+      ${v.collapsedSections.envLayers ? '' : `
       <div class="raster-summary">${v.layersSummary.loadedCount}/${v.layersSummary.totalCount} ${esc(t.layers.loadedLabel)}${v.layersSummary.hasMultiple ? '  •  ' + esc(t.layers.resolution) + ' ' + (v.layersSummary.resMatch ? '✓' : '✗ ' + esc(t.layers.mismatch)) + '  •  CRS ' + (v.layersSummary.crsMatch ? '✓' : '✗ ' + esc(t.layers.mismatch)) : ''}</div>
 
       ${SHOW_UPLOADS ? `
@@ -1035,10 +1046,15 @@
               </div>` : ''}`}
           </div>`).join('')}
       `).join('')}
+      `}
     </div>`;
 
     html += `<div class="card accent-blue">
-      <div class="panel-head"><div class="badge badge-blue">03</div><div class="panel-title">${esc(t.climate.title)}</div></div>
+      <div class="panel-head" data-action="toggleSection" data-id="climate" style="cursor:pointer">
+        <div class="badge badge-blue">03</div><div class="panel-title">${esc(t.climate.title)}</div>
+        <div class="collapse-chevron">${v.collapsedSections.climate ? '▸' : '▾'}</div>
+      </div>
+      ${v.collapsedSections.climate ? '' : `
       <div class="climate-sub-title">${esc(t.climate.projectTitle)}</div>
       <div class="field-row">
         <div class="field-label-row" style="margin-bottom:5px"><div>${esc(t.climate.yearLabel)}</div></div>
@@ -1069,6 +1085,7 @@
             <div class="climate-stat-row"><div class="climate-stat-label">${esc(t.climate.projectedLabel)}: ${esc(cv.displayName)}</div><div class="climate-stat-value">${cv.projectedFmt} ${esc(cv.unit)}</div></div>`).join('')}
         </div>` : ''}
       <div class="climate-note">${esc(t.climate.note)}</div>
+      `}
     </div>`;
 
     html += `<div class="run-btn" style="background:${v.runBtnColor}" data-action="runModel">▶ ${esc(v.runBtnLabel)}</div>

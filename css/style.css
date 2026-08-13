@@ -84,6 +84,7 @@ a:hover { color: #2f5570; }
 .card.accent-orange { border-left: 3px solid #b5652f; }
 
 .panel-head { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+.collapse-chevron { margin-left: auto; font-size: 12px; color: #8a8f80; }
 .badge { font-family: ui-monospace, Menlo, monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.03em; padding: 3px 6px; border-radius: 4px; flex-shrink: 0; }
 .badge-brown { background: #f6e9df; color: #a85a34; }
 .badge-green { background: #eef2ea; color: #4f7942; }
