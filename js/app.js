@@ -683,6 +683,12 @@
     const legendSpecies = selectedSpecies.map(sp => ({ displayName: isTh ? sp.thai : sp.common, color: sp.color }));
 
     const allOccurrencePoints = activeSpecies.flatMap(sp => sp.points);
+    // Real reported individuals per occurrence point (GBIF individualCount,
+    // defaulting to 1 for records that don't specify a count) — used for the
+    // population-change estimate below. Falls back to 1 for any species data
+    // that doesn't carry a counts array (e.g. an uploaded CSV).
+    const allOccurrenceWithCounts = activeSpecies.flatMap(sp =>
+      sp.points.map((latlng, i) => ({ latlng, count: (sp.counts && sp.counts[i] !== undefined) ? sp.counts[i] : 1 })));
     const loadedLayers = st.layers.filter(l => l.raster);
     let resMatch = true, crsMatch = true;
     if (loadedLayers.length > 1) {
@@ -822,6 +828,34 @@
       projectedMeanHSI = probs.length ? probs.reduce((a, b) => a + b, 0) / probs.length : null;
     }
 
+    // Estimated population change: currentPopulation is the real sum of
+    // GBIF individualCount across all occurrence points (not a record
+    // count) — 38,015 for the bundled dataset. projectedPopulation scales
+    // each point's real count by the fitted model's local ratio of
+    // projected-to-current predicted suitability (points outside the
+    // loaded rasters keep their count unchanged, since there's nothing to
+    // scale by). This is an illustrative scaling of real observed counts by
+    // a real fitted local suitability ratio — not a demographic model (no
+    // birth/death/migration), and it's presented that way in the UI.
+    let currentPopulation = null, projectedPopulation = null;
+    if (fm) {
+      const rasters = fm.varIds.map(id => st.layers.find(l => l.id === LAYER_ID_BY_CURVE_ID[id]).raster);
+      let curTotal = 0, projTotal = 0;
+      allOccurrenceWithCounts.forEach(({ latlng, count }) => {
+        curTotal += count;
+        const [lat, lon] = latlng;
+        const rawCur = rasters.map(r => sampleRasterAt(r, lat, lon));
+        if (rawCur.some(v => v === null)) { projTotal += count; return; }
+        const rawProj = fm.varIds.map((id, j) => rawCur[j] + (deltaByVarId[id] || 0));
+        const pCur = predictProb(fm.model, zRow(fm.stats, rawCur));
+        const pProj = predictProb(fm.model, zRow(fm.stats, rawProj));
+        const ratio = pCur > 0.001 ? pProj / pCur : 1;
+        projTotal += count * ratio;
+      });
+      currentPopulation = Math.round(curTotal);
+      projectedPopulation = Math.round(projTotal);
+    }
+
     let rasterTabInfo = null;
     if (st.mapTab === 'rainfall' || st.mapTab === 'temperature' || st.mapTab === 'forest' || st.mapTab === 'dust') {
       const layer = st.layers.find(l => l.id === st.mapTab);
@@ -856,7 +890,8 @@
       mapTab: st.mapTab, rasterTabInfo,
       visiblePoints, modelRun: st.modelRun, notRun: !st.modelRun,
       contribBars, responseCurves,
-      meanHSI: fm ? fm.meanHSI : null, cvAUC: fm ? fm.cvAUC : null, projectedMeanHSI
+      meanHSI: fm ? fm.meanHSI : null, cvAUC: fm ? fm.cvAUC : null, projectedMeanHSI,
+      currentPopulation, projectedPopulation
     };
   }
 
@@ -1021,7 +1056,17 @@
              const diffColor = diff > 0.005 ? '#4f7942' : diff < -0.005 ? '#c1573a' : '#8a8f80';
              const diffStr = (diff > 0 ? '+' : '') + diff.toFixed(2);
              return `<div class="results-summary" style="margin-top:4px">${esc(t.climate.projectedHSI)} ${v.settings.targetYear}: <b style="color:#23281f">${v.projectedMeanHSI.toFixed(2)}</b> <span style="color:${diffColor}">(${diffStr} ${esc(t.climate.vsCurrent)})</span></div>`;
-           })() : ''}`}
+           })() : ''}
+           ${v.currentPopulation !== null ? `
+           <div class="results-summary" style="margin-top:10px">${esc(t.suitability.population)} <b style="color:#23281f">${v.currentPopulation.toLocaleString()}</b></div>
+           ${v.projectedPopulation !== null ? (() => {
+             const diff = v.projectedPopulation - v.currentPopulation;
+             const pct = v.currentPopulation ? (100 * diff / v.currentPopulation) : 0;
+             const diffColor = diff > 0 ? '#4f7942' : diff < 0 ? '#c1573a' : '#8a8f80';
+             const diffStr = (diff > 0 ? '+' : '') + diff.toLocaleString() + ' (' + (diff > 0 ? '+' : '') + pct.toFixed(1) + '%)';
+             return `<div class="results-summary" style="margin-top:4px">${esc(t.suitability.projectedPopulation)} ${v.settings.targetYear}: <b style="color:#23281f">${v.projectedPopulation.toLocaleString()}</b> <span style="color:${diffColor}">(${diffStr})</span></div>`;
+           })() : ''}
+           <div class="climate-note" style="margin-top:4px">${esc(t.suitability.populationNote)}</div>` : ''}`}
       ${v.modelRun ? `
         <div class="climate-sub-title" style="margin-top:12px">${esc(t.climate.optimalTitle)}</div>
         <div class="climate-stats">
