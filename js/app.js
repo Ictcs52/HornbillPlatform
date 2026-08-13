@@ -6,7 +6,18 @@
     mapTab: 'distribution',
     speciesSel: { great: true, wreathed: true, rufous: true, rhino: true, helmeted: true },
     layers: ENV_LAYERS.map(l => ({ ...l })),
-    settings: { targetYear: 2035, tempDelta: 0, rainfallDelta: 0, dustDelta: 0 },
+    settings: {
+      targetYear: 2030,
+      // Each target year keeps its own temp/rainfall/dust deltas, entered
+      // and stored independently — switching years recalls that year's
+      // values instead of sharing one set across all of them.
+      deltasByYear: {
+        2025: { tempDelta: 0, rainfallDelta: 0, dustDelta: 0 },
+        2030: { tempDelta: 0, rainfallDelta: 0, dustDelta: 0 },
+        2050: { tempDelta: 0, rainfallDelta: 0, dustDelta: 0 },
+        2070: { tempDelta: 0, rainfallDelta: 0, dustDelta: 0 }
+      }
+    },
     dataValidated: true, // bundled sample data is loaded and considered validated by default
     running: false,
     runProgress: 0,
@@ -129,7 +140,7 @@
   function setClimateAbsolute(field, value) {
     const curveId = CURVE_ID_BY_DELTA_FIELD[field];
     const curve = computeVals().responseCurves.find(c => c.id === curveId);
-    state.settings[field] = Number(value) - curve.optimalValue;
+    state.settings.deltasByYear[state.settings.targetYear][field] = Number(value) - curve.optimalValue;
     render();
   }
   function setLang(l) { state.lang = l; render(); }
@@ -768,7 +779,8 @@
         }).sort((a, b) => b.pct - a.pct)
       : VARIABLE_CONTRIBUTION.map(v => ({ ...v, displayName: t.variables[v.name] || v.name, width: Math.round((v.pct / 40) * 100) }));
 
-    const deltaByVarId = { temp: st.settings.tempDelta, rainfall: st.settings.rainfallDelta, dust: st.settings.dustDelta };
+    const yearDeltas = st.settings.deltasByYear[st.settings.targetYear];
+    const deltaByVarId = { temp: yearDeltas.tempDelta, rainfall: yearDeltas.rainfallDelta, dust: yearDeltas.dustDelta };
     const responseCurves = RESPONSE_CURVES.map(c => {
       const layer = st.layers.find(l => l.id === (LAYER_ID_BY_CURVE_ID[c.id] || c.id));
       const observedMedian = layer && layer.raster ? medianRasterValueAtPoints(layer.raster, allOccurrencePoints) : null;
@@ -793,6 +805,22 @@
       };
     });
 
+    // Projected Mean HSI: the fitted model's average predicted probability
+    // at occurrence points using the *selected year's* delta-shifted
+    // feature values, instead of the current real ones — a real number
+    // that changes as the per-year temp/rainfall/dust inputs change.
+    let projectedMeanHSI = null;
+    if (fm) {
+      const rasters = fm.varIds.map(id => st.layers.find(l => l.id === LAYER_ID_BY_CURVE_ID[id]).raster);
+      const probs = [];
+      allOccurrencePoints.forEach(([lat, lon]) => {
+        const rawCur = rasters.map(r => sampleRasterAt(r, lat, lon));
+        if (rawCur.some(v => v === null)) return;
+        const rawProj = fm.varIds.map((id, j) => rawCur[j] + (deltaByVarId[id] || 0));
+        probs.push(predictProb(fm.model, zRow(fm.stats, rawProj)));
+      });
+      projectedMeanHSI = probs.length ? probs.reduce((a, b) => a + b, 0) / probs.length : null;
+    }
 
     let rasterTabInfo = null;
     if (st.mapTab === 'rainfall' || st.mapTab === 'temperature' || st.mapTab === 'forest' || st.mapTab === 'dust') {
@@ -828,7 +856,7 @@
       mapTab: st.mapTab, rasterTabInfo,
       visiblePoints, modelRun: st.modelRun, notRun: !st.modelRun,
       contribBars, responseCurves,
-      meanHSI: fm ? fm.meanHSI : null, cvAUC: fm ? fm.cvAUC : null
+      meanHSI: fm ? fm.meanHSI : null, cvAUC: fm ? fm.cvAUC : null, projectedMeanHSI
     };
   }
 
@@ -940,7 +968,7 @@
       <div class="field-row">
         <div class="field-label-row" style="margin-bottom:5px"><div>${esc(t.climate.yearLabel)}</div></div>
         <select data-onchange="setting" data-field="targetYear" data-numeric="true">
-          ${[2030, 2050, 2070].map(y => `<option value="${y}" ${v.settings.targetYear === y ? 'selected' : ''}>${y}</option>`).join('')}
+          ${[2025, 2030, 2050, 2070].map(y => `<option value="${y}" ${v.settings.targetYear === y ? 'selected' : ''}>${y}</option>`).join('')}
         </select>
       </div>
       ${(() => {
@@ -987,7 +1015,13 @@
       ${v.notRun ? `<div class="results-empty">${esc(t.results.noResults)}</div>`
         : v.meanHSI === null ? `<div class="results-empty">${esc(t.suitability.noModel)}</div>`
         : `<div class="results-summary">${esc(t.suitability.mean)} <b style="color:#23281f">${v.meanHSI.toFixed(2)}</b></div>
-           <div class="results-summary" style="margin-top:4px">${esc(t.suitability.cvAuc)} <b style="color:#23281f">${v.cvAUC !== null ? v.cvAUC.toFixed(2) : '—'}</b></div>`}
+           <div class="results-summary" style="margin-top:4px">${esc(t.suitability.cvAuc)} <b style="color:#23281f">${v.cvAUC !== null ? v.cvAUC.toFixed(2) : '—'}</b></div>
+           ${v.projectedMeanHSI !== null ? (() => {
+             const diff = v.projectedMeanHSI - v.meanHSI;
+             const diffColor = diff > 0.005 ? '#4f7942' : diff < -0.005 ? '#c1573a' : '#8a8f80';
+             const diffStr = (diff > 0 ? '+' : '') + diff.toFixed(2);
+             return `<div class="results-summary" style="margin-top:4px">${esc(t.climate.projectedHSI)} ${v.settings.targetYear}: <b style="color:#23281f">${v.projectedMeanHSI.toFixed(2)}</b> <span style="color:${diffColor}">(${diffStr} ${esc(t.climate.vsCurrent)})</span></div>`;
+           })() : ''}`}
       ${v.modelRun ? `
         <div class="climate-sub-title" style="margin-top:12px">${esc(t.climate.optimalTitle)}</div>
         <div class="climate-stats">

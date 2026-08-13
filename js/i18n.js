@@ -21,7 +21,8 @@ const T = {
       projectTitle: 'Project to target year', yearLabel: 'Target year', projectedLabel: 'Projected value',
       tempLabel: 'Temperature change', rainfallLabel: 'Rainfall change', dustLabel: 'Dust (PM2.5) change',
       responseCurvesTitle: 'Response Curves (climate)', variableImportanceTitle: 'Variable Importance (climate)',
-      note: 'Illustrative — reuses the same fitted model with temp/rainfall/dust shifted by the deltas below.'
+      projectedHSI: 'Projected Mean HSI, year', vsCurrent: 'vs. current',
+      note: 'Each target year keeps its own temp/rainfall/dust values — switch years above to enter or review that year’s scenario. Response curves come from the same fitted model, evaluated at each year’s shifted values.'
     }
   },
   th: {
@@ -46,7 +47,8 @@ const T = {
       projectTitle: 'คาดการณ์ถึงปีเป้าหมาย', yearLabel: 'ปีเป้าหมาย', projectedLabel: 'ค่าที่คาดการณ์',
       tempLabel: 'อุณหภูมิเปลี่ยนแปลง', rainfallLabel: 'ปริมาณฝนเปลี่ยนแปลง', dustLabel: 'ฝุ่น (PM2.5) เปลี่ยนแปลง',
       responseCurvesTitle: 'กราฟความสัมพันธ์ (ภูมิอากาศ)', variableImportanceTitle: 'อิทธิพลของตัวแปร (ภูมิอากาศ)',
-      note: 'เป็นภาพประกอบ — ใช้โมเดลเดิมที่ฟิตไว้แล้ว แทนค่า Temp/ฝน/ฝุ่นด้วยค่าที่เปลี่ยนไปตามด้านล่าง'
+      projectedHSI: 'Mean HSI ที่คาดการณ์ ปี', vsCurrent: 'เทียบกับปัจจุบัน',
+      note: 'แต่ละปีเป้าหมายเก็บค่าอุณหภูมิ/ฝน/ฝุ่นของตัวเองแยกกัน — สลับปีด้านบนเพื่อกรอกหรือดูค่าของปีนั้น กราฟความสัมพันธ์มาจากโมเดลเดียวกันที่ fit ไว้ คำนวณด้วยค่าที่เปลี่ยนไปของแต่ละปี'
     }
   }
 };
