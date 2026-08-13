@@ -202,6 +202,8 @@ a:hover { color: #2f5570; }
 }
 .map-wrap.fullscreen #leafletMap { height: 100% !important; border-radius: 0; }
 .map-note { font-size: 10px; color: #8a8f80; margin-top: 8px; line-height: 1.5; font-style: italic; }
+.map-gradient { height: 12px; border-radius: 4px; margin-top: 12px; }
+.map-scale-labels { display: flex; justify-content: space-between; font-size: 11px; color: #8a8f80; margin-top: 4px; }
 .map-legend-species { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
 .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #6b7062; }
 .legend-dot { width: 7px; height: 7px; border-radius: 50%; }

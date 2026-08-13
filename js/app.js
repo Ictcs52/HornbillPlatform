@@ -4,6 +4,7 @@
   const state = {
     lang: 'en',
     mapTab: 'distribution',
+    forestRiskTab: 'rainfall',
     speciesSel: { great: true, wreathed: true, rufous: true, rhino: true, helmeted: true },
     layers: ENV_LAYERS.map(l => ({ ...l })),
     settings: {
@@ -145,6 +146,7 @@
   }
   function setLang(l) { state.lang = l; render(); }
   function setMapTab(tab) { state.mapTab = tab; render(); }
+  function setForestRiskTab(tab) { state.forestRiskTab = tab; render(); }
   function toggleSpecies(id) { state.speciesSel[id] = !state.speciesSel[id]; render(); }
   function validateData() { state.dataValidated = true; render(); }
   function useSampleData() {
@@ -360,7 +362,7 @@
   }
 
   const ACTIONS = {
-    setLang, setMapTab, toggleSpecies, validateData, useSampleData,
+    setLang, setMapTab, setForestRiskTab, toggleSpecies, validateData, useSampleData,
     removeLayer, removeRasterFromLayer,
     validateStationData, useSampleRaster,
     addLayer, runModel, toggleMapFullscreen,
@@ -867,6 +869,41 @@
       projectedPopulation = Math.round(projTotal);
     }
 
+    // Forest × per-variable risk: for the currently selected forestRiskTab
+    // variable (rainfall/temperature/dust), color each occurrence point by
+    // that ONE variable's predicted suitability drop (holding the other
+    // variables at their current/observed value), shown against the forest
+    // cover basemap — to see whether at-risk points sit in low-forest areas.
+    function pointVarRisk(varId, lat, lon) {
+      if (!fm || !fm.varIds.includes(varId)) return null;
+      const j = fm.varIds.indexOf(varId);
+      const rasters = fm.varIds.map(id => st.layers.find(l => l.id === LAYER_ID_BY_CURVE_ID[id]).raster);
+      const rawCur = rasters.map(r => sampleRasterAt(r, lat, lon));
+      if (rawCur.some(v => v === null)) return null;
+      const rawProj = rawCur.slice();
+      rawProj[j] = rawCur[j] + (deltaByVarId[varId] || 0);
+      const curP = predictProb(fm.model, zRow(fm.stats, rawCur));
+      const projP = predictProb(fm.model, zRow(fm.stats, rawProj));
+      return curP - projP;
+    }
+    function forestRiskColor(risk) {
+      if (risk === null) return '#8a8f80';
+      if (risk < 0.03) return '#6ea55a';
+      if (risk < 0.12) return '#d9a441';
+      return '#c1573a';
+    }
+    const forestRiskUsable = !!(fm && fm.varIds.includes(st.forestRiskTab));
+    const forestRiskPoints = visiblePoints.map(pt => {
+      if (!forestRiskUsable) return { latlng: pt.latlng, color: pt.color, species: pt.species, riskPct: null };
+      const risk = pointVarRisk(st.forestRiskTab, pt.latlng[0], pt.latlng[1]);
+      return {
+        latlng: pt.latlng, color: forestRiskColor(risk), species: pt.species,
+        riskPct: risk !== null ? Math.round(risk * 100) : null
+      };
+    });
+    const forestLayer = st.layers.find(l => l.id === 'forest');
+    const forestRiskLoaded = !!(forestLayer && forestLayer.raster && forestLayer.raster.imgUrl);
+
     let rasterTabInfo = null;
     if (st.mapTab === 'rainfall' || st.mapTab === 'temperature' || st.mapTab === 'forest' || st.mapTab === 'dust') {
       const layer = st.layers.find(l => l.id === st.mapTab);
@@ -902,7 +939,8 @@
       visiblePoints, modelRun: st.modelRun, notRun: !st.modelRun,
       contribBars, responseCurves,
       meanHSI: fm ? fm.meanHSI : null, cvAUC: fm ? fm.cvAUC : null, projectedMeanHSI,
-      currentPopulation, projectedPopulation
+      currentPopulation, projectedPopulation,
+      forestRiskTab: st.forestRiskTab, forestRiskUsable, forestRiskPoints, forestRiskLoaded
     };
   }
 
@@ -1152,6 +1190,41 @@
       <div class="legend-item"><div class="legend-dot" style="background:${l.color}"></div>${esc(l.displayName)}</div>`).join('');
   }
 
+  // Second map: forest cover as a fixed basemap across 3 tabs (one per
+  // climate variable), with occurrence points colored by that single
+  // variable's predicted risk — lets a viewer see whether at-risk points
+  // sit in low-forest areas. Falls back to species-colored points (and a
+  // note explaining why) until a model has actually been fit.
+  function renderForestRiskChrome(v) {
+    const t = v.t;
+    document.getElementById('forestRiskPanelTitle').textContent = t.mapPanel.forestRiskTitle;
+    document.getElementById('riskTabRainfall').textContent = t.mapPanel.riskRainfall;
+    document.getElementById('riskTabRainfall').classList.toggle('active', v.forestRiskTab === 'rainfall');
+    document.getElementById('riskTabTemperature').textContent = t.mapPanel.riskTemperature;
+    document.getElementById('riskTabTemperature').classList.toggle('active', v.forestRiskTab === 'temp');
+    document.getElementById('riskTabDust').textContent = t.mapPanel.riskDust;
+    document.getElementById('riskTabDust').classList.toggle('active', v.forestRiskTab === 'dust');
+
+    const gradientEl = document.getElementById('forestRiskGradient');
+    const scaleLabelsEl = document.getElementById('forestRiskScaleLabels');
+    const legendEl = document.getElementById('forestRiskLegendSpecies');
+
+    if (v.forestRiskUsable) {
+      gradientEl.style.display = 'block';
+      gradientEl.style.background = 'linear-gradient(to right,#6ea55a,#d9a441,#c1573a)';
+      scaleLabelsEl.style.display = 'flex';
+      scaleLabelsEl.innerHTML = `<div>${esc(t.mapPanel.riskLow)}</div><div>${esc(t.mapPanel.riskHigh)}</div>`;
+      legendEl.innerHTML = '';
+      document.getElementById('forestRiskNote').textContent = t.map.forestRiskNoteFit;
+    } else {
+      gradientEl.style.display = 'none';
+      scaleLabelsEl.style.display = 'none';
+      legendEl.innerHTML = v.legendSpecies.map(l => `
+        <div class="legend-item"><div class="legend-dot" style="background:${l.color}"></div>${esc(l.displayName)}</div>`).join('');
+      document.getElementById('forestRiskNote').textContent = t.map.forestRiskNoteNotFit;
+    }
+  }
+
   // --- Leaflet map: a single persistent map instance, updated in place so it
   // never gets torn down by the innerHTML re-renders above. ---
   let map, pointsLayer, rasterOverlay, boundaryOutline, boundsFitted = false;
@@ -1280,6 +1353,47 @@
     }
   }
 
+  // --- Second Leaflet map: forest cover as a fixed basemap, points colored
+  // by whichever single climate variable's risk is selected. Separate
+  // persistent instance so it doesn't interfere with the main map above. ---
+  let forestRiskMap, forestRiskPointsLayer, forestRiskRasterOverlay, forestRiskBoundary, forestRiskBoundsFitted = false;
+
+  function initForestRiskMap() {
+    forestRiskMap = L.map('forestRiskMap', { scrollWheelZoom: true, preferCanvas: true });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+      maxZoom: 18
+    }).addTo(forestRiskMap);
+    forestRiskPointsLayer = L.layerGroup().addTo(forestRiskMap);
+  }
+
+  function updateForestRiskMap(v) {
+    if (!forestRiskMap) return;
+    forestRiskPointsLayer.clearLayers();
+    if (forestRiskRasterOverlay) { forestRiskMap.removeLayer(forestRiskRasterOverlay); forestRiskRasterOverlay = null; }
+    if (forestRiskBoundary) { forestRiskMap.removeLayer(forestRiskBoundary); forestRiskBoundary = null; }
+
+    if (v.forestRiskLoaded) {
+      const layer = state.layers.find(l => l.id === 'forest');
+      const [west, south, east, north] = layer.raster.bbox;
+      forestRiskRasterOverlay = L.imageOverlay(layer.raster.imgUrl, [[south, west], [north, east]], { opacity: 0.7 }).addTo(forestRiskMap);
+    }
+    const outlineSource = state.provinceBoundaries || THAILAND_BOUNDARY;
+    forestRiskBoundary = L.geoJSON(outlineSource, { style: { color: '#23281f', weight: 0.7, opacity: 0.5, fill: false } }).addTo(forestRiskMap);
+
+    v.forestRiskPoints.forEach(pt => {
+      const popup = esc(pt.species) + (pt.riskPct !== null ? ' — ' + (pt.riskPct > 0 ? '−' : '+') + Math.abs(pt.riskPct) + '% HSI' : '');
+      L.circleMarker(pt.latlng, {
+        radius: 3, color: '#ffffff', weight: 1, fillColor: pt.color, fillOpacity: 0.9
+      }).bindPopup(popup).addTo(forestRiskPointsLayer);
+    });
+
+    if (!forestRiskBoundsFitted && v.forestRiskPoints.length) {
+      forestRiskMap.fitBounds(L.latLngBounds(v.forestRiskPoints.map(p => p.latlng)), { padding: [24, 24] });
+      forestRiskBoundsFitted = true;
+    }
+  }
+
   function renderCollapse() {
     const grid = document.querySelector('.grid');
     grid.style.setProperty('--left-w', state.leftCollapsed ? '20px' : '330px');
@@ -1296,8 +1410,10 @@
     renderLeftCol(v);
     renderRightCol(v);
     renderMapChrome(v);
+    renderForestRiskChrome(v);
     renderCollapse();
     updateLeafletLayers(v);
+    updateForestRiskMap(v);
   }
 
   const DEFAULT_RASTERS = [
@@ -1325,6 +1441,7 @@
 
   function boot() {
     initMap();
+    initForestRiskMap();
     render();
     loadDefaultRasters();
     fetch('./assets/thailand-provinces.geojson')
