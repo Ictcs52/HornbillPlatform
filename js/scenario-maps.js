@@ -1,7 +1,7 @@
 // Scenario-aware environmental maps for the original student UI.
 (function(){
   'use strict';
-  const M={main:null,rasters:null,overlay:null,baseline:{temp:null,rainfall:null,dust:null},panel:null,ready:false,panelCollapsed:false};
+  const M={main:null,rasters:null,overlay:null,baseline:{temp:null,rainfall:null,dust:null},panel:null,ready:false,panelCollapsed:false,refreshTimer:null};
   const oldMap=L.map.bind(L);
   L.map=function(id,opt){const m=oldMap(id,opt);if(id==='leafletMap')M.main=m;return m;};
 
@@ -38,8 +38,8 @@
 
   function styles(){const s=document.createElement('style');s.textContent=`#forestRiskScaleLabels{display:none!important}.pm25-region-panel{position:absolute;right:10px;top:54px;z-index:1200;width:225px;background:#fff;border:1px solid #e9e4d6;border-radius:8px;padding:11px;box-shadow:0 2px 7px rgba(0,0,0,.16);transition:width .18s ease,padding .18s ease}.pm25-region-head{display:flex;align-items:flex-start;gap:7px}.pm25-region-title{font-size:11.5px;font-weight:700;line-height:1.35;flex:1}.pm25-region-title span{color:#8a8f80}.pm25-region-toggle{width:25px;height:25px;flex:0 0 25px;border:1px solid #d8d2bf;border-radius:5px;background:#fff;color:#6b7062;font-size:16px;line-height:1;cursor:pointer}.pm25-region-toggle:hover{background:#f2ede3}.pm25-region-row{display:grid;grid-template-columns:28px 1fr 52px;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid #f0ede1;font-size:10.5px}.pm25-region-row span{color:#6b7062}.pm25-region-row strong{text-align:center;border:1px solid;border-radius:5px;padding:4px;background:#fff}.pm25-region-note{font-size:9.5px;color:#8a8f80;line-height:1.4;margin-top:8px}.pm25-region-panel.collapsed{width:42px;padding:8px}.pm25-region-panel.collapsed .pm25-region-title,.pm25-region-panel.collapsed .pm25-region-body{display:none}.pm25-region-panel.collapsed .pm25-region-head{justify-content:center}@media(max-width:700px){.pm25-region-panel{right:8px;top:54px;width:200px}}`;document.head.appendChild(s);}
 
-  let timer1,timer2;function schedule(){clearTimeout(timer1);clearTimeout(timer2);timer1=setTimeout(updateMap,120);timer2=setTimeout(updateMap,420);}
-  document.addEventListener('click',e=>{if(e.target.closest('[data-action="setMapTab"],[data-action="setLang"],[data-action="runModel"]'))schedule();});
-  document.addEventListener('change',e=>{if(e.target.matches('select[data-field="targetYear"],input[data-onchange="climateAbsolute"]'))schedule();});
-  document.addEventListener('DOMContentLoaded',async()=>{styles();try{M.rasters={temp:await fetchGeoTiff('./assets/rasters/mean_temp_annual_tmd_1991-2020.tif','temperature'),rainfall:await fetchGeoTiff('./assets/rasters/rainfall_annual_tmd_1991-2020.tif','rainfall'),dust:await fetchGeoTiff('./assets/rasters/pm25_regional_2014-2024.tif','pm25')};M.baseline.temp=observedMedian(M.rasters.temp);M.baseline.rainfall=observedMedian(M.rasters.rainfall);M.baseline.dust=observedMedian(M.rasters.dust);calcRegional();M.ready=true;schedule();}catch(err){console.error('Scenario maps:',err);}});
+  function schedule(delay){clearTimeout(M.refreshTimer);M.refreshTimer=setTimeout(updateMap,delay||180);}
+  document.addEventListener('click',e=>{if(e.target.closest('[data-action="setMapTab"],[data-action="setLang"],[data-action="runModel"]'))schedule(180);});
+  document.addEventListener('change',e=>{if(e.target.matches('select[data-field="targetYear"],input[data-onchange="climateAbsolute"]'))schedule(220);});
+  document.addEventListener('DOMContentLoaded',async()=>{styles();try{M.rasters={temp:await fetchGeoTiff('./assets/rasters/mean_temp_annual_tmd_1991-2020.tif','temperature'),rainfall:await fetchGeoTiff('./assets/rasters/rainfall_annual_tmd_1991-2020.tif','rainfall'),dust:await fetchGeoTiff('./assets/rasters/pm25_regional_2014-2024.tif','pm25')};M.baseline.temp=observedMedian(M.rasters.temp);M.baseline.rainfall=observedMedian(M.rasters.rainfall);M.baseline.dust=observedMedian(M.rasters.dust);calcRegional();M.ready=true;schedule(100);}catch(err){console.error('Scenario maps:',err);}});
 })();
