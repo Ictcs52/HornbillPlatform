@@ -8,7 +8,13 @@
   function median(a){if(!a.length)return null;a=a.slice().sort((x,y)=>x-y);const m=Math.floor(a.length/2);return a.length%2?a[m]:(a[m-1]+a[m])/2;}
   function activeTab(){if(document.getElementById('mapTabTemperature')?.classList.contains('active'))return'temp';if(document.getElementById('mapTabRainfall')?.classList.contains('active'))return'rainfall';if(document.getElementById('mapTabDust')?.classList.contains('active'))return'dust';return'distribution';}
   function input(field){const e=document.querySelector(`input[data-onchange="climateAbsolute"][data-field="${field}"]`);return e?Number(e.value):null;}
-  function deltas(){const t=input('tempDelta'),r=input('rainfallDelta'),d=input('dustDelta');return{temp:t===null?0:t-M.baseline.temp,rainfall:r===null?0:r-M.baseline.rainfall,dust:d===null?0:d-M.baseline.dust};}
+  function deltas(){
+    if(window.HORNBILL_SCENARIO_API&&typeof window.HORNBILL_SCENARIO_API.deltas==='function'){
+      return window.HORNBILL_SCENARIO_API.deltas();
+    }
+    const t=input('tempDelta'),r=input('rainfallDelta'),d=input('dustDelta');
+    return{temp:t===null?0:t-M.baseline.temp,rainfall:r===null?0:r-M.baseline.rainfall,dust:d===null?0:d-M.baseline.dust};
+  }
 
   function insideRing(lat,lon,ring){let inside=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];if(((yi>lat)!==(yj>lat))&&lon<(xj-xi)*(lat-yi)/((yj-yi)||1e-12)+xi)inside=!inside;}return inside;}
   function inside(lat,lon){const g=typeof THAILAND_BOUNDARY!=='undefined'?THAILAND_BOUNDARY:null;if(!g)return true;const x=g.type==='Feature'?g.geometry:g;if(x.type==='Polygon')return insideRing(lat,lon,x.coordinates[0]);if(x.type==='MultiPolygon')return x.coordinates.some(p=>insideRing(lat,lon,p[0]));return true;}
