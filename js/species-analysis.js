@@ -346,6 +346,19 @@
     return'rainfall';
   }
 
+  function ensureModelPanes(){
+    if(!E.mainMap)return;
+    if(!E.mainMap.getPane('habitatModelPane')){
+      const p=E.mainMap.createPane('habitatModelPane'); p.style.zIndex=430; p.style.pointerEvents='none';
+    }
+    if(!E.mainMap.getPane('projectedPane')){
+      const p=E.mainMap.createPane('projectedPane'); p.style.zIndex=680; p.style.pointerEvents='auto';
+    }
+    if(!E.mainMap.getPane('shiftPane')){
+      const p=E.mainMap.createPane('shiftPane'); p.style.zIndex=700; p.style.pointerEvents='auto';
+    }
+  }
+
   function clearProjectedLayer(){
     if(E.mainMap&&E.projectedLayer&&E.mainMap.hasLayer(E.projectedLayer))E.mainMap.removeLayer(E.projectedLayer);
     E.projectedLayer=null;
@@ -394,7 +407,7 @@
       const target=Math.max(0,Math.min(180,Math.round(baseRep*ratio)));
       representativeCells(sd.futCells,target).forEach(p=>{
         L.circleMarker([p[0],p[1]],{
-          radius:4,color:'#fff',weight:1,fillColor:m.sp.color||'#333',fillOpacity:.88
+          pane:'projectedPane',radius:4,color:'#fff',weight:1,fillColor:m.sp.color||'#333',fillOpacity:.88
         }).bindTooltip((th?m.sp.thai:m.sp.common)+' — '+(th?'ตำแหน่งพื้นที่เหมาะสมที่คาดการณ์':'projected suitable location')+' (HSI '+p[2].toFixed(2)+')')
           .addTo(grp);
       });
@@ -415,12 +428,12 @@
       const a=suitableCentroid(m,false,del),b=suitableCentroid(m,true,del);
       if(!a||!b)return;
       const color=m.sp.color||'#333';
-      const line=L.polyline([[a.lat,a.lon],[b.lat,b.lon]],{color,weight:2.2,opacity:.9,dashArray:'6,4'}).addTo(grp);
+      const line=L.polyline([[a.lat,a.lon],[b.lat,b.lon]],{pane:'shiftPane',color,weight:2.2,opacity:.9,dashArray:'6,4'}).addTo(grp);
       const ang=Math.atan2(b.lat-a.lat,(b.lon-a.lon)*Math.cos(b.lat*Math.PI/180));
       const len=.22,spread=.55,cc=Math.max(.2,Math.cos(b.lat*Math.PI/180));
       const p1=[b.lat-len*Math.sin(ang-spread),b.lon-len*Math.cos(ang-spread)/cc];
       const p2=[b.lat-len*Math.sin(ang+spread),b.lon-len*Math.cos(ang+spread)/cc];
-      L.polyline([p1,[b.lat,b.lon],p2],{color,weight:2.2,opacity:.9}).addTo(grp);
+      L.polyline([p1,[b.lat,b.lon],p2],{pane:'shiftPane',color,weight:2.2,opacity:.9}).addTo(grp);
       const th=document.getElementById('langThBtn')?.classList.contains('active');
       line.bindTooltip((th?m.sp.thai:m.sp.common)+': '+(th?'ทิศทางการเลื่อนของศูนย์กลางพื้นที่เหมาะสม':'projected suitable-area centroid shift'));
     });
@@ -437,7 +450,8 @@
     removeOverlay(map,key);
     const r=E.grids.ref,[w,s,e,n]=r.bbox;
     const op=(kind==='distribution'&&E.distributionMode==='change')?0.86:(opacity||0.62);
-    E[key]=L.imageOverlay(canvasUrl(kind),[[s,w],[n,e]],{opacity:op,interactive:false,pane:'overlayPane'}).addTo(map);
+    ensureModelPanes();
+    E[key]=L.imageOverlay(canvasUrl(kind),[[s,w],[n,e]],{opacity:op,interactive:false,pane:'habitatModelPane'}).addTo(map);
   }
 
   function ensureDistributionControl() {
@@ -503,6 +517,7 @@
 
   function refreshMaps() {
     if(!E.ran||!E.grids)return;
+    ensureModelPanes();
     // Rendering Current / Scenario / Change must use the scenario snapshot
     // calculated by the last Run. Rebuilding here made every compare-button
     // click silently recalculate from live controls and could make the three
