@@ -377,6 +377,11 @@
       window.HORNBILL_MAP_API.setOccurrenceVisible(visible);
     }
   }
+  function setOccurrenceMode(mode){
+    if(window.HORNBILL_MAP_API&&typeof window.HORNBILL_MAP_API.setOccurrenceMode==='function'){
+      window.HORNBILL_MAP_API.setOccurrenceMode(mode);
+    }
+  }
   function representativeCells(cells,target){
     if(!cells||!cells.length||target<=0)return[];
     const n=Math.min(target,cells.length);
@@ -525,7 +530,7 @@
             ? 'Scenario projection is unavailable for species whose inputs fall outside their fitted data range; unsupported extrapolations are not plotted.'
             : 'Scenario: representative projected suitable-location points. Point count changes with modelled suitable-area change; these are not predicted bird counts.';
         }
-        else note.innerHTML='Change compares both maps together: original GBIF bird locations remain visible, while <b style="color:#b58a00">yellow-ring points</b> are projected suitable locations for the selected scenario. <b style="color:#4d749c">Blue = stable</b> · <b style="color:#37915c">Green = gain</b> · <b style="color:#c14c3b">Red = loss</b>; dashed arrows show suitable-area centroid shift.';
+        else note.innerHTML='Change view: <b>hollow grey points = current GBIF locations</b>; <b style="color:#b58a00">yellow-ring points = projected suitable locations</b>. <b style="color:#4d749c">Blue = stable</b> · <b style="color:#37915c">Green = gain</b> · <b style="color:#c14c3b">Red = loss</b>; dashed arrows show suitable-area centroid shift.';
       }
       else note.textContent=`Model overlay: ${mainKind==='temp'?'Temperature':mainKind==='rainfall'?'Rainfall':'PM2.5'} scenario effect on habitat suitability. Green = suitability increase; red = decrease.`;
     }
@@ -545,10 +550,17 @@
     updateDistributionControl();
     addOverlay(E.mainMap,'mainOverlay',mainKind,mainKind==='distribution'?0.58:0.48);
     if(mainKind==='distribution'&&E.distributionMode==='change')drawShiftArrows();else clearShiftLayer();
-    if(mainKind==='distribution'&&E.grids.deltas.year!==2025&&(E.distributionMode==='future'||E.distributionMode==='change')){
+    if(mainKind==='distribution'&&E.grids.deltas.year!==2025&&E.distributionMode==='future'){
+      setOccurrenceMode('normal');
+      drawProjectedPoints();
+    } else if(mainKind==='distribution'&&E.grids.deltas.year!==2025&&E.distributionMode==='change'){
+      setOccurrenceVisible(true);
+      setOccurrenceMode('compare');
       drawProjectedPoints();
     } else {
-      clearProjectedLayer(); setOccurrenceVisible(true);
+      clearProjectedLayer();
+      setOccurrenceVisible(true);
+      setOccurrenceMode('normal');
     }
     const forestKind=activeForestTab();
     addOverlay(E.forestMap,'forestOverlay',forestKind,0.46);
