@@ -26,6 +26,8 @@
     rasters: null,
     models: [],
     grids: null,
+    distributionMode: 'change',
+    distributionControl: null,
     ran: false,
     running: false,
     refreshTimer: null,
@@ -257,6 +259,12 @@
     const t=v/Math.max(1,max);
     return [Math.round(245-150*t),Math.round(238-70*t),Math.round(210-135*t),180];
   }
+  function rgbaChange(cur,fut) {
+    if(!cur&&!fut)return[0,0,0,0];
+    if(cur&&fut)return[77,116,156,185];   // Stable habitat
+    if(cur&&!fut)return[193,76,59,205];   // Loss
+    return[55,145,92,205];                // Gain
+  }
   function rgbaRisk(change) {
     if(Math.abs(change)<0.005)return[0,0,0,0];
     // Green = suitability improves, red = suitability declines.
@@ -268,7 +276,11 @@
     const ctx=c.getContext('2d'), img=ctx.createImageData(r.width,r.height);
     for(let i=0;i<r.width*r.height;i++){
       let q;
-      if(kind==='distribution') q=rgbaRich(g.deltas.year===2025?g.richnessCur[i]:g.richnessFut[i],g.maxSpecies);
+      if(kind==='distribution'){
+        if(E.distributionMode==='current') q=rgbaRich(g.richnessCur[i],g.maxSpecies);
+        else if(E.distributionMode==='future') q=rgbaRich(g.richnessFut[i],g.maxSpecies);
+        else q=rgbaChange(g.richnessCur[i]>0,g.richnessFut[i]>0);
+      }
       else q=rgbaRisk(g.risk[kind][i]);
       const p=i*4;img.data[p]=q[0];img.data[p+1]=q[1];img.data[p+2]=q[2];img.data[p+3]=q[3];
     }
@@ -299,10 +311,39 @@
     E[key]=L.imageOverlay(canvasUrl(kind),[[s,w],[n,e]],{opacity:opacity||0.62,interactive:false,pane:'overlayPane'}).addTo(map);
   }
 
+  function ensureDistributionControl() {
+    if(E.distributionControl || !E.mainMap)return;
+    const Control=L.Control.extend({
+      options:{position:'topright'},
+      onAdd:function(){
+        const d=L.DomUtil.create('div','habitat-compare-control');
+        L.DomEvent.disableClickPropagation(d);L.DomEvent.disableScrollPropagation(d);
+        d.innerHTML='<button data-mode="current">Current</button><button data-mode="future">Scenario</button><button data-mode="change">Change</button>';
+        d.addEventListener('click',ev=>{const b=ev.target.closest('button[data-mode]');if(!b)return;E.distributionMode=b.dataset.mode;updateDistributionControl();scheduleRefresh(20);});
+        return d;
+      }
+    });
+    E.distributionControl=new Control().addTo(E.mainMap);
+    const s=document.createElement('style');
+    s.textContent='.habitat-compare-control{background:#fff;padding:4px;border-radius:6px;box-shadow:0 1px 5px rgba(0,0,0,.25);display:flex;gap:3px}.habitat-compare-control button{border:0;border-radius:4px;padding:5px 7px;font:600 10px sans-serif;background:#f1eee4;color:#5c6256;cursor:pointer}.habitat-compare-control button.active{background:#287f83;color:#fff}';
+    document.head.appendChild(s);
+  }
+  function updateDistributionControl(){
+    ensureDistributionControl();
+    if(!E.distributionControl)return;
+    const el=E.distributionControl.getContainer(),show=activeMainTab()==='distribution'&&E.ran;
+    el.style.display=show?'flex':'none';
+    el.querySelectorAll('button[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===E.distributionMode));
+  }
+
   function updateNotes(mainKind,forestKind) {
     const note=document.getElementById('mapRealNote');
     if(note&&E.ran){
-      if(mainKind==='distribution')note.textContent='Model overlay: combined habitat suitability richness from separate species models. Selected species are calculated independently and overlaid on this original map.';
+      if(mainKind==='distribution'){
+        if(E.distributionMode==='current')note.textContent='Current habitat suitability: modelled suitable area under baseline environmental conditions.';
+        else if(E.distributionMode==='future')note.textContent='Scenario habitat suitability: modelled suitable area after applying the selected Temperature, Rainfall and PM2.5 scenario.';
+        else note.innerHTML='Habitat change: <b style="color:#4d749c">Blue = stable</b> · <b style="color:#37915c">Green = gain</b> · <b style="color:#c14c3b">Red = loss</b>. This indicates change in suitable habitat, not observed bird movement.';
+      }
       else note.textContent=`Model overlay: ${mainKind==='temp'?'Temperature':mainKind==='rainfall'?'Rainfall':'PM2.5'} scenario effect on habitat suitability. Green = suitability increase; red = decrease.`;
     }
     const f=document.getElementById('forestRiskNote');
@@ -313,6 +354,7 @@
     if(!E.ran||!E.grids)return;
     buildGrids();
     const mainKind=activeMainTab();
+    updateDistributionControl();
     addOverlay(E.mainMap,'mainOverlay',mainKind,mainKind==='distribution'?0.58:0.48);
     const forestKind=activeForestTab();
     addOverlay(E.forestMap,'forestOverlay',forestKind,0.46);
@@ -353,6 +395,7 @@
   // after the original app refreshes its raster/point layers.
   const obs=new MutationObserver(()=>{if(E.ran)scheduleRefresh(90);});
   document.addEventListener('DOMContentLoaded',()=>{
+    ensureDistributionControl();
     const app=document.getElementById('app'); if(app)obs.observe(app,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style']});
   });
 })();
