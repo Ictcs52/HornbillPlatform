@@ -42,7 +42,60 @@
   function modelSpecies(sp,i){const pts=clean(sp),px=[];pts.forEach(p=>{const r=sample(p[0],p[1]);if(r)px.push(r);});if(px.length<C.min)return null;const seed=(C.seed+hash(sp.id||i))>>>0,b=bg(pts,seed);if(b.length<C.min)return null;const raw=px.concat(b),st=stats(raw),X=px.map(r=>z(st,r)).concat(b.map(r=>z(st,r))),y=new Array(px.length).fill(1).concat(new Array(b.length).fill(0)),m=fit(X,y),sc=X.map(r=>pred(m,r)),base=auc(sc,y),pp=px.map(r=>pred(m,z(st,r)));return{sp,st,m,threshold:thresh(sc,y),cv:cv(X,y,seed^0x9e3779b9),hsi:pp.reduce((a,b)=>a+b,0)/pp.length,imp:importance(X,y,m,base,seed^0x85ebca6b),med:px[0].map((_,j)=>median(px.map(r=>r[j])))};}
   function scenario(){const get=f=>{const e=document.querySelector(`input[data-onchange="climateAbsolute"][data-field="${f}"]`);return e?Number(e.value):null;};const t=get('tempDelta'),r=get('rainfallDelta'),d=get('dustDelta');return{temp:t===null?0:t-S.baseline.temp,rainfall:r===null?0:r-S.baseline.rainfall,dust:d===null?0:d-S.baseline.dust};}
   function areaFor(m){const ref=S.rasters.temp,[w,s,e,n]=ref.bbox,del=scenario();let cur=0,fut=0;for(let row=0;row<ref.height;row+=2){const lat=n-(row+.5)/ref.height*(n-s),dlat=(n-s)/ref.height*2,dlon=(e-w)/ref.width*2,ar=111.32*dlat*111.32*Math.cos(lat*Math.PI/180)*dlon;for(let col=0;col<ref.width;col+=2){const lon=w+(col+.5)/ref.width*(e-w);if(!inThai(lat,lon))continue;const raw=sample(lat,lon);if(!raw)continue;const p0=pred(m.m,z(m.st,raw)),p1=pred(m.m,z(m.st,[raw[0]+del.temp,raw[1]+del.rainfall,raw[2]+del.dust,raw[3]]));if(p0>=m.threshold)cur+=ar;if(p1>=m.threshold)fut+=ar;}}return{cur,fut};}
-  function render(){if(!S.ran)return;const host=document.getElementById('colRightContent');if(!host)return;const th=document.getElementById('langThBtn')?.classList.contains('active'),mods=S.models.filter(m=>chosen().some(s=>s.id===m.sp.id));if(!mods.length)return;const areas=Object.fromEntries(mods.map(m=>[m.sp.id,areaFor(m)])),avg=[0,0,0,0];mods.forEach(m=>m.imp.forEach((v,i)=>avg[i]+=v));avg.forEach((_,i)=>avg[i]/=mods.length);const rows=mods.map(m=>{const a=areas[m.sp.id],diff=a.fut-a.cur,pct=a.cur?100*diff/a.cur:0;return`<div class="results-summary" style="padding:7px 0;border-bottom:1px solid #eee9db"><b style="color:#23281f">${esc(th?m.sp.thai:m.sp.common)}</b><br>Mean HSI <b>${m.hsi.toFixed(2)}</b> · CV AUC <b>${m.cv===null?'—':m.cv.toFixed(2)}</b><br>${th?'Habitat Change':'Habitat Change'}: ${Math.round(a.cur).toLocaleString()} → ${Math.round(a.fut).toLocaleString()} km² <span style="color:${diff<0?'#c1573a':diff>0?'#4f7942':'#8a8f80'}">(${pct>=0?'+':''}${pct.toFixed(1)}%)</span></div>`;}).join('');const meds=mods.map(m=>`<div class="climate-stat-row"><div class="climate-stat-label">${esc(th?m.sp.thai:m.sp.common)}</div><div class="climate-stat-value">${m.med[0].toFixed(1)}°C · ${m.med[1].toFixed(0)}mm · ${m.med[2].toFixed(1)}µg/m³ · ${m.med[3].toFixed(0)}%</div></div>`).join('');const names=['Temperature','Rainfall','PM2.5','Forest Cover'],bars=names.map((n,i)=>`<div class="contrib-row"><div class="contrib-top"><div>${n}</div><div style="font-weight:600">${avg[i].toFixed(0)}%</div></div><div class="contrib-bar-track"><div class="contrib-bar-fill" style="width:${Math.min(100,avg[i])}%"></div></div></div>`).join('');host.innerHTML=`<div class="card accent-orange"><div class="panel-head"><div class="badge badge-orange">05</div><div class="panel-title">${th?'ผลลัพธ์รายชนิด':'Species-level Results'}</div></div>${rows}<div class="climate-note">${th?'คำนวณแยกโมเดลรายชนิด ผลลัพธ์หมายถึงความเหมาะสมของถิ่นอาศัยและการเปลี่ยนแปลงพื้นที่เหมาะสมเท่านั้น ไม่ใช่จำนวนประชากร การตาย หรือการเคลื่อนที่จริงของนก หาก PM2.5 สูงแล้ว HSI เพิ่ม ต้องตีความว่าเป็นความสัมพันธ์ทางสถิติของโมเดล ไม่ใช่หลักฐานว่าฝุ่นเป็นประโยชน์ต่อนก':'Separate models per species. Results represent habitat suitability and suitable-area change only; they do not estimate population growth, mortality, or actual bird movement. Positive suitability under a high PM2.5 scenario is a statistical model response, not evidence that pollution benefits birds.'}</div></div><div class="card"><div class="results-head"><div class="results-head-title">Observed median</div></div><div class="climate-stats">${meds}</div></div><div class="card" style="margin-bottom:0"><div class="results-head"><div class="results-head-title">${th?'Variable Importance (เฉลี่ยชนิดที่เลือก)':'Variable Importance (selected-species mean)'}</div></div>${bars}</div>`;}
+  function observedForSpecies(sp){
+    const vals=[];
+    clean(sp).forEach(p=>{const r=sample(p[0],p[1]);if(r)vals.push(r);});
+    if(!vals.length)return{n:0,med:null};
+    return{n:vals.length,med:vals[0].map((_,j)=>median(vals.map(r=>r[j])))};
+  }
+  function render(){
+    if(!S.ran)return;
+    const host=document.getElementById('colRightContent');if(!host)return;
+    const th=document.getElementById('langThBtn')?.classList.contains('active');
+    const selected=chosen();
+    const modelById=Object.fromEntries(S.models.map(m=>[m.sp.id,m]));
+    const mods=selected.map(sp=>modelById[sp.id]).filter(Boolean);
+    const areas=Object.fromEntries(mods.map(m=>[m.sp.id,areaFor(m)]));
+    const avg=[0,0,0,0];
+    mods.forEach(m=>m.imp.forEach((v,i)=>avg[i]+=v));
+    if(mods.length)avg.forEach((_,i)=>avg[i]/=mods.length);
+
+    const rows=selected.map(sp=>{
+      const m=modelById[sp.id];
+      if(!m){
+        const obs=observedForSpecies(sp);
+        return `<div class="results-summary" style="padding:7px 0;border-bottom:1px solid #eee9db">
+          <b style="color:#23281f">${esc(th?sp.thai:sp.common)}</b><br>
+          <span style="color:#a35f35;font-weight:600">${th?'ข้อมูลไม่เพียงพอสำหรับสร้างโมเดลที่เชื่อถือได้':'Insufficient data for a reliable model'}</span><br>
+          <span style="color:#8a8f80">${th?'จุดที่ใช้ได้หลังตรวจสอบ':'Usable occurrence points after checks'}: ${obs.n} / ${C.min} ${th?'ขั้นต่ำ':'minimum'}</span>
+        </div>`;
+      }
+      const a=areas[m.sp.id],diff=a.fut-a.cur,pct=a.cur?100*diff/a.cur:0;
+      return `<div class="results-summary" style="padding:7px 0;border-bottom:1px solid #eee9db">
+        <b style="color:#23281f">${esc(th?m.sp.thai:m.sp.common)}</b><br>
+        Mean HSI <b>${m.hsi.toFixed(2)}</b> · CV AUC <b>${m.cv===null?'—':m.cv.toFixed(2)}</b><br>
+        Habitat Change: ${Math.round(a.cur).toLocaleString()} → ${Math.round(a.fut).toLocaleString()} km²
+        <span style="color:${diff<0?'#c1573a':diff>0?'#4f7942':'#8a8f80'}">(${pct>=0?'+':''}${pct.toFixed(1)}%)</span>
+      </div>`;
+    }).join('');
+
+    const meds=selected.map(sp=>{
+      const m=modelById[sp.id],obs=m?{n:clean(sp).length,med:m.med}:observedForSpecies(sp);
+      const value=obs.med
+        ? `${obs.med[0].toFixed(1)}°C · ${obs.med[1].toFixed(0)}mm · ${obs.med[2].toFixed(1)}µg/m³ · ${obs.med[3].toFixed(0)}%`
+        : '—';
+      return `<div class="climate-stat-row"><div class="climate-stat-label">${esc(th?sp.thai:sp.common)}</div><div class="climate-stat-value">${value}</div></div>`;
+    }).join('');
+
+    const names=['Temperature','Rainfall','PM2.5','Forest Cover'];
+    const bars=mods.length
+      ? names.map((n,i)=>`<div class="contrib-row"><div class="contrib-top"><div>${n}</div><div style="font-weight:600">${avg[i].toFixed(0)}%</div></div><div class="contrib-bar-track"><div class="contrib-bar-fill" style="width:${Math.min(100,avg[i])}%"></div></div></div>`).join('')
+      : `<div class="results-summary">${th?'ไม่มีชนิดที่มีข้อมูลเพียงพอสำหรับคำนวณ Variable Importance':'No selected species has sufficient data for Variable Importance.'}</div>`;
+
+    host.innerHTML=`<div class="card accent-orange"><div class="panel-head"><div class="badge badge-orange">05</div><div class="panel-title">${th?'ผลลัพธ์รายชนิด':'Species-level Results'}</div></div>${rows}<div class="climate-note">${th?'แสดงครบทุกชนิดที่เลือก ชนิดที่ข้อมูลไม่ผ่านเกณฑ์ขั้นต่ำจะแสดงสถานะข้อมูลไม่เพียงพอแทนการซ่อนผลลัพธ์ ผลลัพธ์ของชนิดที่สร้างโมเดลได้หมายถึงความเหมาะสมและการเปลี่ยนแปลงพื้นที่ถิ่นอาศัย ไม่ใช่จำนวนประชากรหรือการตายของนก':'All selected species are shown. Species that do not meet the minimum usable-data requirement are marked as insufficient rather than hidden. Modelled results represent habitat suitability and suitable-area change, not bird population or mortality.'}</div></div>
+    <div class="card"><div class="results-head"><div class="results-head-title">Observed median</div></div><div class="climate-stats">${meds}</div></div>
+    <div class="card" style="margin-bottom:0"><div class="results-head"><div class="results-head-title">${th?'Variable Importance (เฉลี่ยเฉพาะชนิดที่สร้างโมเดลได้)':'Variable Importance (mean of modelled selected species)'}</div></div>${bars}</div>`;
+  }
   async function load(){S.rasters={temp:await fetchGeoTiff('./assets/rasters/mean_temp_annual_tmd_1991-2020.tif','temp'),rainfall:await fetchGeoTiff('./assets/rasters/rainfall_annual_tmd_1991-2020.tif','rain'),dust:await fetchGeoTiff('./assets/rasters/pm25_regional_2014-2024.tif','dust'),forest:await fetchGeoTiff('./assets/rasters/forest_cover_2025_hansen.tif','forest')};const pts=SPECIES.flatMap(s=>clean(s));['temp','rainfall','dust'].forEach(id=>S.baseline[id]=median(pts.map(p=>sampleRasterAt(S.rasters[id],p[0],p[1])).filter(v=>v!==null)));}
   async function run(){if(S.running)return;S.running=true;try{if(!S.rasters)await load();S.models=[];for(let i=0;i<SPECIES.length;i++){const m=modelSpecies(SPECIES[i],i);if(m)S.models.push(m);}S.ran=!!S.models.length;setTimeout(render,3400);}catch(e){console.error('Species results:',e);}finally{S.running=false;}}
   function schedule(delay){if(!S.ran)return;clearTimeout(S.timer);S.timer=setTimeout(render,delay==null?60:delay);}
