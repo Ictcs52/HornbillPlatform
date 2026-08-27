@@ -786,9 +786,14 @@
     const validNote = '✓ ' + validRecordsFmt + (isTh ? ' ระเบียนที่ผ่านการตรวจสอบจาก ' + selectedCount + ' ชนิด' : ' valid records across ' + selectedCount + ' species');
 
     const canRun = st.dataValidated && st.layers.some(l => l.raster) && selectedCount > 0;
-    const runBtnLabel = st.running ? t.simulation.running : (st.modelRun ? t.simulation.runAgain : t.simulation.run);
-    const runBtnColor = st.running ? '#8a8f80' : 'linear-gradient(135deg, #4f7942, #1f7a8a)';
-    const canRunNote = st.running ? t.simulation.notePipeline : (st.modelRun ? t.simulation.noteComplete : (canRun ? t.simulation.noteReady : t.simulation.noteBlocked));
+    const baselineAuto = st.settings.targetYear === 2025;
+    const runBtnLabel = baselineAuto
+      ? (isTh ? 'Baseline อัตโนมัติ' : 'Baseline auto')
+      : (st.running ? t.simulation.running : (st.modelRun ? t.simulation.runAgain : t.simulation.run));
+    const runBtnColor = baselineAuto ? '#8a8f80' : (st.running ? '#8a8f80' : 'linear-gradient(135deg, #4f7942, #1f7a8a)');
+    const canRunNote = baselineAuto
+      ? (isTh ? 'ปี 2025 เป็นค่าฐานปัจจุบัน ระบบคำนวณและแสดงผลอัตโนมัติ' : '2025 is the current baseline; results are calculated and shown automatically.')
+      : (st.running ? t.simulation.notePipeline : (st.modelRun ? t.simulation.noteComplete : (canRun ? t.simulation.noteReady : t.simulation.noteBlocked)));
 
     // fm is null until Run has been clicked with at least one climate layer
     // (temp/rainfall/dust) loaded — see fitHabitatModel(). Everything below
@@ -1112,7 +1117,7 @@
       `}
     </div>`;
 
-    html += `<div class="run-btn" style="background:${v.runBtnColor}" data-action="runModel">▶ ${esc(v.runBtnLabel)}</div>
+    html += `<div class="run-btn" style="background:${v.runBtnColor};${v.settings.targetYear===2025?'cursor:default;opacity:.85':''}" ${v.settings.targetYear===2025?'':'data-action="runModel"'}>${v.settings.targetYear===2025?'✓':'▶'} ${esc(v.runBtnLabel)}</div>
       <div class="run-note">${esc(v.canRunNote)}</div>
       ${v.running ? `
         <div class="run-log">
