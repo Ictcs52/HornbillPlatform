@@ -136,12 +136,12 @@
     if (key === 'targetYear') {
       const y = Number(val);
       state.settings.targetYear = y;
-      // A target year is a scenario label, not a source of future-climate data.
-      // Start every year selection from the observed/current environmental baseline
-      // so stale values entered for a previous run/year cannot silently reappear.
-      state.settings.deltasByYear[y] = { tempDelta: 0, rainfallDelta: 0, dustDelta: 0 };
-      state.modelRun = false;
-      state.modelResults = null;
+      // Each target year keeps its own scenario values. Switching years recalls
+      // the values previously entered for that year and re-evaluates the maps/results
+      // with the same fitted model; no climate values are invented automatically.
+      if (!state.settings.deltasByYear[y]) {
+        state.settings.deltasByYear[y] = { tempDelta: 0, rainfallDelta: 0, dustDelta: 0 };
+      }
       render();
       return;
     }
