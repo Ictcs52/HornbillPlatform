@@ -1229,6 +1229,15 @@
       maxZoom: 18
     }).addTo(map);
     pointsLayer = L.layerGroup().addTo(map);
+    window.HORNBILL_MAP_API = {
+      map: () => map,
+      setOccurrenceVisible: (visible) => {
+        if (!map || !pointsLayer) return;
+        const has = map.hasLayer(pointsLayer);
+        if (visible && !has) pointsLayer.addTo(map);
+        if (!visible && has) map.removeLayer(pointsLayer);
+      }
+    };
   }
 
   let mapFullscreen = false;
