@@ -183,7 +183,8 @@
     const raw=px.concat(bg), st=standardizeStats(raw);
     const X=px.map(r=>zrow(st,r)).concat(bg.map(r=>zrow(st,r))), y=new Array(px.length).fill(1).concat(new Array(bg.length).fill(0));
     const model=fitLogistic(X,y), scores=X.map(r=>predict(model,r));
-    return { sp, st, model, threshold:threshold(scores,y), trainAuc:auc(scores,y) };
+    const ranges=px[0].map((_,j)=>({min:Math.min(...px.map(r=>r[j])),max:Math.max(...px.map(r=>r[j]))}));
+    return { sp, st, model, threshold:threshold(scores,y), trainAuc:auc(scores,y), ranges };
   }
 
   async function loadRasters() {
@@ -205,6 +206,11 @@
   }
 
   function scenarioDeltas() {
+    if(window.HORNBILL_SCENARIO_API&&typeof window.HORNBILL_SCENARIO_API.deltas==='function'){
+      const d=window.HORNBILL_SCENARIO_API.deltas();
+      const year=window.HORNBILL_SCENARIO_API.currentYear?window.HORNBILL_SCENARIO_API.currentYear():2025;
+      return {year,temp:d.temp||0,rainfall:d.rainfall||0,dust:d.dust||0};
+    }
     const yearSel=document.querySelector('select[data-field="targetYear"]');
     const year=yearSel?Number(yearSel.value):2025;
     const get = field => {
@@ -212,14 +218,18 @@
       return el ? Number(el.value) : null;
     };
     const t=get('tempDelta'), r=get('rainfallDelta'), d=get('dustDelta');
-    return {
-      year,
-      temp: t===null||E.baselineMedian.temp===null?0:t-E.baselineMedian.temp,
-      rainfall: r===null||E.baselineMedian.rainfall===null?0:r-E.baselineMedian.rainfall,
-      dust: d===null||E.baselineMedian.dust===null?0:d-E.baselineMedian.dust
-    };
+    return {year,temp:t===null||E.baselineMedian.temp===null?0:t-E.baselineMedian.temp,rainfall:r===null||E.baselineMedian.rainfall===null?0:r-E.baselineMedian.rainfall,dust:d===null||E.baselineMedian.dust===null?0:d-E.baselineMedian.dust};
   }
-
+  function scenarioAbsolute(){
+    const get=field=>{const el=document.querySelector(`input[data-onchange="climateAbsolute"][data-field="${field}"]`);return el?Number(el.value):null;};
+    return [get('tempDelta'),get('rainfallDelta'),get('dustDelta')];
+  }
+  function scenarioValidForModel(m){
+    const del=scenarioDeltas();
+    if(del.year===2025)return true;
+    const vals=scenarioAbsolute();
+    return vals.every((v,j)=>v!==null&&m.ranges&&v>=m.ranges[j].min&&v<=m.ranges[j].max);
+  }
   function cellCenter(r,row,col){const[w,s,e,n]=r.bbox;return[n-(row+.5)/r.height*(n-s),w+(col+.5)/r.width*(e-w)];}
   function predictAt(m,lat,lon,deltas,onlyVar) {
     const cur=samplePredictors(lat,lon); if(!cur)return null;
@@ -247,18 +257,22 @@
         let nRiskT=0,nRiskR=0,nRiskD=0;
         for(const m of models){
           const full=predictAt(m,lat,lon,deltas,null); if(!full)continue;
-          const sd=speciesData[m.sp.id];
+          const sd=speciesData[m.sp.id], valid=scenarioValidForModel(m);
+          sd.valid=valid;
           if(full.current>=m.threshold){
             richnessCur[i]++; sd.curCount++;
             if(row%2===0&&col%2===0)sd.curCells.push([lat,lon,full.current]);
           }
-          if(full.future>=m.threshold){
+          const futureScore=(deltas.year===2025||!valid)?full.current:full.future;
+          if(futureScore>=m.threshold){
             richnessFut[i]++; sd.futCount++;
-            if(row%2===0&&col%2===0)sd.futCells.push([lat,lon,full.future]);
+            if(row%2===0&&col%2===0&&valid&&deltas.year!==2025)sd.futCells.push([lat,lon,futureScore]);
           }
-          const pt=predictAt(m,lat,lon,deltas,'temp'); if(pt){risk.temp[i]+=pt.change;nRiskT++;}
-          const pr=predictAt(m,lat,lon,deltas,'rainfall'); if(pr){risk.rainfall[i]+=pr.change;nRiskR++;}
-          const pd=predictAt(m,lat,lon,deltas,'dust'); if(pd){risk.dust[i]+=pd.change;nRiskD++;}
+          if(valid&&deltas.year!==2025){
+            const pt=predictAt(m,lat,lon,deltas,'temp'); if(pt){risk.temp[i]+=pt.change;nRiskT++;}
+            const pr=predictAt(m,lat,lon,deltas,'rainfall'); if(pr){risk.rainfall[i]+=pr.change;nRiskR++;}
+            const pd=predictAt(m,lat,lon,deltas,'dust'); if(pd){risk.dust[i]+=pd.change;nRiskD++;}
+          }
         }
         if(nRiskT)risk.temp[i]/=nRiskT;
         if(nRiskR)risk.rainfall[i]/=nRiskR;
@@ -358,6 +372,7 @@
     const th=document.getElementById('langThBtn')?.classList.contains('active');
     const grp=L.layerGroup();
     Object.values(E.grids.speciesData||{}).forEach(sd=>{
+      if(!sd.valid||E.grids.deltas.year===2025)return;
       const m=sd.model,baseObs=cleanPoints(m.sp).length;
       const baseRep=Math.max(10,Math.min(120,Math.round(Math.sqrt(Math.max(1,baseObs))*5)));
       const ratio=sd.curCount>0?sd.futCount/sd.curCount:0;
@@ -439,7 +454,12 @@
     if(note&&E.ran){
       if(mainKind==='distribution'){
         if(E.distributionMode==='current')note.textContent='Current: real GBIF occurrence points over modelled baseline suitable habitat.';
-        else if(E.distributionMode==='future')note.textContent='Scenario: representative projected suitable-location points. Point count changes with modelled suitable-area change; these are not predicted bird counts.';
+        else if(E.distributionMode==='future'){
+          const invalid=Object.values(E.grids.speciesData||{}).some(sd=>sd.valid===false);
+          note.textContent=invalid
+            ? 'Scenario projection is unavailable for species whose inputs fall outside their fitted data range; unsupported extrapolations are not plotted.'
+            : 'Scenario: representative projected suitable-location points. Point count changes with modelled suitable-area change; these are not predicted bird counts.';
+        }
         else note.innerHTML='Habitat change: <b style="color:#4d749c">Blue = stable</b> · <b style="color:#37915c">Green = gain</b> · <b style="color:#c14c3b">Red = loss</b>. Colored dots are representative projected suitable locations and vary with suitable area; dashed arrows show centroid shift. They are not bird population counts or observed movement.';
       }
       else note.textContent=`Model overlay: ${mainKind==='temp'?'Temperature':mainKind==='rainfall'?'Rainfall':'PM2.5'} scenario effect on habitat suitability. Green = suitability increase; red = decrease.`;
