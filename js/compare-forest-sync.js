@@ -30,10 +30,9 @@
     return upperTabs.find(id => document.getElementById(id)?.classList.contains('active')) || 'mapTabDist';
   }
 
-  // species-analysis.js used to click Hornbill Distribution whenever a compare
-  // button was used from Temperature/Rainfall/PM2.5. Instead, only during the
-  // compare click event, make it THINK Distribution is active. The real tab is
-  // restored synchronously before the browser paints, so there is no jumping.
+  // During a compare click from an environmental tab, temporarily let the
+  // species engine render its comparison geometry without changing what the
+  // user sees. The original tab is restored before paint.
   function pretendDistributionForThisClick() {
     const activeId = activeUpperTab();
     if (activeId === 'mapTabDist') return;
@@ -53,7 +52,6 @@
     document.getElementById(saved.id)?.classList.add('active');
     const note = document.getElementById('mapRealNote');
     if (note) note.innerHTML = saved.note;
-    // Environmental maps keep their normal occurrence markers.
     window.HORNBILL_MAP_API?.setOccurrenceVisible?.(true);
   }
 
@@ -91,8 +89,8 @@
     if (content) target.bindTooltip(content);
   }
 
-  // Copy the EXACT comparison geometry already computed by species-analysis.js
-  // from the Prediction Map to the forest map. No second model is fitted here.
+  // Copy the exact comparison geometry already computed by species-analysis.js
+  // to the forest map. No second model fit is performed here.
   function copyComparisonToForest(mode) {
     if (!mainMap || !forestMap || mode === 'current') return false;
     const group = L.layerGroup();
@@ -100,10 +98,20 @@
 
     mainMap.eachLayer(layer => {
       const pane = layer?.options?.pane;
+
+      // Change is now a raster AREA overlay, not hundreds of point markers.
+      if (mode === 'change' && layer instanceof L.ImageOverlay && pane === 'changeAreaPane') {
+        const url = layer._url;
+        const bounds = layer.getBounds?.();
+        if (url && bounds) {
+          L.imageOverlay(url, bounds, { opacity: layer.options?.opacity ?? 1, interactive: false }).addTo(group);
+          copied++;
+        }
+        return;
+      }
+
       if (layer instanceof L.CircleMarker) {
-        const include = mode === 'scenario'
-          ? pane === 'projectedPointPane'
-          : pane === 'changePointPane' || pane === 'projectedPointPane';
+        const include = pane === 'projectedPointPane';
         if (!include) return;
         const o = layer.options || {};
         const clone = L.circleMarker(layer.getLatLng(), {
@@ -132,9 +140,6 @@
       }
     });
 
-    // If the upper map is currently an environmental raster, the comparison
-    // geometry may not exist there. Keep the previous lower comparison instead
-    // of clearing the forest map to an empty state.
     if (!copied) return false;
     clearForestCompare();
     group.addTo(forestMap);
@@ -147,7 +152,7 @@
     const remove = [];
     mainMap.eachLayer(layer => {
       const pane = layer?.options?.pane;
-      if (pane === 'changePointPane' || pane === 'projectedPointPane' || pane === 'shiftArrowPane') remove.push(layer);
+      if (pane === 'changeAreaPane' || pane === 'projectedPointPane' || pane === 'shiftArrowPane') remove.push(layer);
     });
     remove.forEach(layer => mainMap.removeLayer(layer));
   }
@@ -186,8 +191,8 @@
         : 'Scenario: <b style="color:#b58a00">yellow-ring points</b> are projected suitable locations after Run on the forest map.';
     } else {
       note.innerHTML = th
-        ? 'การเปลี่ยนแปลงบนพื้นที่ป่าไม้: <b style="color:#4d749c">น้ำเงิน = คงเดิม</b> · <b style="color:#37915c">เขียว = เพิ่มขึ้น</b> · <b style="color:#c14c3b">แดง = ลดลง</b> · วงเหลือง = จุดคาดการณ์'
-        : 'Forest habitat change: <b style="color:#4d749c">blue = stable</b> · <b style="color:#37915c">green = gain</b> · <b style="color:#c14c3b">red = loss</b> · yellow ring = projected.';
+        ? 'การเปลี่ยนแปลงแสดงเป็น <b>พื้นที่สี</b> บนพื้นที่ป่าไม้: <b style="color:#4d749c">น้ำเงิน = ชนิดเดิมยังเหมาะสม</b> · <b style="color:#37915c">เขียว = เพิ่มขึ้น</b> · <b style="color:#c14c3b">แดง = ลดลง</b> · <b style="color:#8459a2">ม่วง = จำนวนชนิดเท่าเดิมแต่ชนิดเปลี่ยน</b> · วงเหลือง = จุดคาดการณ์'
+        : 'Forest habitat change is shown as <b>colored areas</b>: <b style="color:#4d749c">blue = stable species set</b> · <b style="color:#37915c">green = gain</b> · <b style="color:#c14c3b">red = loss</b> · <b style="color:#8459a2">purple = turnover</b> · yellow ring = projected.';
     }
   }
 
@@ -200,8 +205,6 @@
       showForestBasePoints(true);
     } else {
       const copied = copyComparisonToForest(lastMode);
-      // Hide current risk points only once the scenario/change geometry is
-      // available; this prevents a blank forest map during background renders.
       if (copied || forestCompareGroup) showForestBasePoints(false);
     }
     updateForestBadge();
@@ -225,12 +228,12 @@
     const modeLabel = (th ? 'โหมด: ' : 'Mode: ') + modeWord(lastMode, th);
     if (label && label.textContent !== modeLabel) label.textContent = modeLabel;
 
-    // Rebuild legend text only when language actually changes, avoiding a
-    // MutationObserver feedback loop.
     if (lastLanguage !== lang) {
       lastLanguage = lang;
       const legend = bar.querySelector('#habitatCompareLegend');
-      const words = th ? ['คงเดิม','เพิ่มขึ้น','ลดลง','จุดคาดการณ์'] : ['Stable','Gain','Loss','Projected'];
+      const words = th
+        ? ['คงเดิม','เพิ่มขึ้น','ลดลง','สับเปลี่ยนชนิด','จุดคาดการณ์']
+        : ['Stable','Gain','Loss','Turnover','Projected'];
       legend?.querySelectorAll('span').forEach((span, i) => {
         const icon = span.querySelector('i');
         const wanted = words[i] || '';
@@ -243,7 +246,7 @@
     }
   }
 
-  // Capture phase occurs before the bar's own listener.
+  // Capture phase occurs before the compare bar's own listener.
   document.addEventListener('click', e => {
     const btn = e.target.closest('#habitatCompareBar button[data-mode]');
     if (!btn) return;
@@ -268,14 +271,10 @@
     if (action === 'setForestRiskTab' || action === 'setLang' || action === 'toggleSpecies') {
       setTimeout(() => { translateCompareBar(); syncForest(); }, 140);
     } else if (action === 'setMapTab') {
-      // Never change the user's chosen Prediction Map tab.
       setTimeout(() => syncForest(), 100);
     }
   });
 
-  // After Run/year changes, species-analysis updates the active compare button.
-  // Watch only class changes; no child-list observation, so translation cannot
-  // trigger a feedback loop.
   const observer = new MutationObserver(() => {
     const active = document.querySelector('#habitatCompareBar button[data-mode].active');
     if (active && active.dataset.mode !== lastMode) {
