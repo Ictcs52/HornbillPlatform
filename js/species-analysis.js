@@ -365,7 +365,10 @@
   }
   function drawProjectedPoints(){
     clearProjectedLayer();
-    if(!E.mainMap||!E.grids||activeMainTab()!=='distribution'||E.distributionMode==='current'){
+    // 2025 is the observed/current baseline. Even if the Compare control is
+    // still on Scenario/Change after switching years, keep real GBIF points
+    // visible and do not replace them with projected points.
+    if(!E.mainMap||!E.grids||activeMainTab()!=='distribution'||E.distributionMode==='current'||E.grids.deltas.year===2025){
       setOccurrenceVisible(true);return;
     }
     setOccurrenceVisible(false);
