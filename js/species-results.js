@@ -39,9 +39,41 @@
   function thresh(sc,y){let best={t:.5,j:-9};for(let t=.15;t<=.85;t+=.01){let tp=0,fn=0,tn=0,fp=0;y.forEach((v,i)=>v?(sc[i]>=t?tp++:fn++):(sc[i]>=t?fp++:tn++));const q=tp/(tp+fn||1)+tn/(tn+fp||1)-1;if(q>best.j)best={t,j:q};}return best.t;}
   function importance(X,y,m,base,seed){const R=rng(seed),d=[];for(let j=0;j<X[0].length;j++){const col=X.map(r=>r[j]);for(let i=col.length-1;i>0;i--){const k=Math.floor(R()*(i+1));[col[i],col[k]]=[col[k],col[i]];}const a=auc(X.map((r,i)=>pred(m,r.map((v,k)=>k===j?col[i]:v))),y);d.push(Math.max(0,(base||.5)-(a||.5)));}const sum=d.reduce((a,b)=>a+b,0);return sum?d.map(v=>100*v/sum):d.map(()=>25);}
   function bg(points,seed){const R=rng(seed),ref=S.rasters.temp,[w,s,e,n]=ref.bbox,out=[],used=new Set(points.map(p=>Math.floor(p[0]/C.thin)+':'+Math.floor(p[1]/C.thin)));let tries=0;while(out.length<C.bg&&tries++<C.bg*60){const lat=s+R()*(n-s),lon=w+R()*(e-w),k=Math.floor(lat/C.thin)+':'+Math.floor(lon/C.thin);if(used.has(k)||!inThai(lat,lon))continue;const r=sample(lat,lon);if(!r)continue;used.add(k);out.push(r);}return out;}
-  function modelSpecies(sp,i){const pts=clean(sp),px=[];pts.forEach(p=>{const r=sample(p[0],p[1]);if(r)px.push(r);});if(px.length<C.min)return null;const seed=(C.seed+hash(sp.id||i))>>>0,b=bg(pts,seed);if(b.length<C.min)return null;const raw=px.concat(b),st=stats(raw),X=px.map(r=>z(st,r)).concat(b.map(r=>z(st,r))),y=new Array(px.length).fill(1).concat(new Array(b.length).fill(0)),m=fit(X,y),sc=X.map(r=>pred(m,r)),base=auc(sc,y),pp=px.map(r=>pred(m,z(st,r)));return{sp,st,m,threshold:thresh(sc,y),cv:cv(X,y,seed^0x9e3779b9),hsi:pp.reduce((a,b)=>a+b,0)/pp.length,imp:importance(X,y,m,base,seed^0x85ebca6b),med:px[0].map((_,j)=>median(px.map(r=>r[j])))};}
-  function scenario(){const get=f=>{const e=document.querySelector(`input[data-onchange="climateAbsolute"][data-field="${f}"]`);return e?Number(e.value):null;};const t=get('tempDelta'),r=get('rainfallDelta'),d=get('dustDelta');return{temp:t===null?0:t-S.baseline.temp,rainfall:r===null?0:r-S.baseline.rainfall,dust:d===null?0:d-S.baseline.dust};}
-  function areaFor(m){const ref=S.rasters.temp,[w,s,e,n]=ref.bbox,del=scenario();let cur=0,fut=0;for(let row=0;row<ref.height;row+=2){const lat=n-(row+.5)/ref.height*(n-s),dlat=(n-s)/ref.height*2,dlon=(e-w)/ref.width*2,ar=111.32*dlat*111.32*Math.cos(lat*Math.PI/180)*dlon;for(let col=0;col<ref.width;col+=2){const lon=w+(col+.5)/ref.width*(e-w);if(!inThai(lat,lon))continue;const raw=sample(lat,lon);if(!raw)continue;const p0=pred(m.m,z(m.st,raw)),p1=pred(m.m,z(m.st,[raw[0]+del.temp,raw[1]+del.rainfall,raw[2]+del.dust,raw[3]]));if(p0>=m.threshold)cur+=ar;if(p1>=m.threshold)fut+=ar;}}return{cur,fut};}
+  function modelSpecies(sp,i){const pts=clean(sp),px=[];pts.forEach(p=>{const r=sample(p[0],p[1]);if(r)px.push(r);});if(px.length<C.min)return null;const seed=(C.seed+hash(sp.id||i))>>>0,b=bg(pts,seed);if(b.length<C.min)return null;const raw=px.concat(b),st=stats(raw),X=px.map(r=>z(st,r)).concat(b.map(r=>z(st,r))),y=new Array(px.length).fill(1).concat(new Array(b.length).fill(0)),m=fit(X,y),sc=X.map(r=>pred(m,r)),base=auc(sc,y),pp=px.map(r=>pred(m,z(st,r))),ranges=px[0].map((_,j)=>({min:Math.min(...px.map(r=>r[j])),max:Math.max(...px.map(r=>r[j]))}));return{sp,st,m,threshold:thresh(sc,y),cv:cv(X,y,seed^0x9e3779b9),hsi:pp.reduce((a,b)=>a+b,0)/pp.length,imp:importance(X,y,m,base,seed^0x85ebca6b),med:px[0].map((_,j)=>median(px.map(r=>r[j]))),ranges};}
+  function scenario(){
+    if(window.HORNBILL_SCENARIO_API&&typeof window.HORNBILL_SCENARIO_API.deltas==='function')return window.HORNBILL_SCENARIO_API.deltas();
+    const get=f=>{const e=document.querySelector(`input[data-onchange="climateAbsolute"][data-field="${f}"]`);return e?Number(e.value):null;};
+    const t=get('tempDelta'),r=get('rainfallDelta'),d=get('dustDelta');
+    return{temp:t===null?0:t-S.baseline.temp,rainfall:r===null?0:r-S.baseline.rainfall,dust:d===null?0:d-S.baseline.dust};
+  }
+  function scenarioAbsolute(){
+    const get=f=>{const e=document.querySelector(`input[data-onchange="climateAbsolute"][data-field="${f}"]`);return e?Number(e.value):null;};
+    return [get('tempDelta'),get('rainfallDelta'),get('dustDelta')];
+  }
+  function scenarioValid(m){
+    const year=window.HORNBILL_SCENARIO_API&&window.HORNBILL_SCENARIO_API.currentYear?window.HORNBILL_SCENARIO_API.currentYear():2025;
+    if(year===2025)return true;
+    const vals=scenarioAbsolute();
+    return vals.every((v,j)=>v!==null&&m.ranges&&v>=m.ranges[j].min&&v<=m.ranges[j].max);
+  }
+  function areaFor(m){
+    const ref=S.rasters.temp,[w,s,e,n]=ref.bbox,del=scenario(),valid=scenarioValid(m);let cur=0,fut=0;
+    for(let row=0;row<ref.height;row+=2){
+      const lat=n-(row+.5)/ref.height*(n-s),dlat=(n-s)/ref.height*2,dlon=(e-w)/ref.width*2,ar=111.32*dlat*111.32*Math.cos(lat*Math.PI/180)*dlon;
+      for(let col=0;col<ref.width;col+=2){
+        const lon=w+(col+.5)/ref.width*(e-w);if(!inThai(lat,lon))continue;
+        const raw=sample(lat,lon);if(!raw)continue;
+        const p0=pred(m.m,z(m.st,raw));if(p0>=m.threshold)cur+=ar;
+        if(valid){
+          const p1=pred(m.m,z(m.st,[raw[0]+del.temp,raw[1]+del.rainfall,raw[2]+del.dust,raw[3]]));
+          if(p1>=m.threshold)fut+=ar;
+        }
+      }
+    }
+    const year=window.HORNBILL_SCENARIO_API&&window.HORNBILL_SCENARIO_API.currentYear?window.HORNBILL_SCENARIO_API.currentYear():2025;
+    if(year===2025)return{cur,fut:cur,invalid:false};
+    return valid?{cur,fut,invalid:false}:{cur,fut:null,invalid:true};
+  }
   function observedForSpecies(sp){
     const vals=[];
     clean(sp).forEach(p=>{const r=sample(p[0],p[1]);if(r)vals.push(r);});
@@ -70,7 +102,16 @@
           <span style="color:#8a8f80">${th?'จุดที่ใช้ได้หลังตรวจสอบ':'Usable occurrence points after checks'}: ${obs.n} / ${C.min} ${th?'ขั้นต่ำ':'minimum'}</span>
         </div>`;
       }
-      const a=areas[m.sp.id],diff=a.fut-a.cur,pct=a.cur?100*diff/a.cur:0;
+      const a=areas[m.sp.id];
+      if(a.invalid){
+        const rr=m.ranges;
+        return `<div class="results-summary" style="padding:7px 0;border-bottom:1px solid #eee9db">
+          <b style="color:#23281f">${esc(th?m.sp.thai:m.sp.common)}</b><br>
+          Mean HSI <b>${m.hsi.toFixed(2)}</b> · CV AUC <b>${m.cv===null?'—':m.cv.toFixed(2)}</b><br>
+          <span style="color:#b04e32;font-weight:700">${th?'ไม่คำนวณ Habitat Change: Scenario อยู่นอกช่วงข้อมูลที่ใช้สร้างโมเดล':'Habitat Change unavailable: scenario is outside the fitted data range'}</span>
+        </div>`;
+      }
+      const diff=a.fut-a.cur,pct=a.cur?100*diff/a.cur:0;
       return `<div class="results-summary" style="padding:7px 0;border-bottom:1px solid #eee9db">
         <b style="color:#23281f">${esc(th?m.sp.thai:m.sp.common)}</b><br>
         Mean HSI <b>${m.hsi.toFixed(2)}</b> · CV AUC <b>${m.cv===null?'—':m.cv.toFixed(2)}</b><br>
