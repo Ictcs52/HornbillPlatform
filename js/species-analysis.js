@@ -442,5 +442,8 @@
   document.addEventListener('DOMContentLoaded',()=>{
     ensureDistributionControl();
     const app=document.getElementById('app'); if(app)obs.observe(app,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style']});
+    // Prepare the baseline habitat grids automatically so 2025 Current/Change
+    // views are available without requiring a manual Run click.
+    setTimeout(()=>runEngine(),300);
   });
 })();
