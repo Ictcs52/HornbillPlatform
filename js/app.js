@@ -1162,6 +1162,11 @@
     </div>`;
 
     document.getElementById('colRightContent').innerHTML = html;
+    // After the original UI renders, hand ownership of post-run Results to the
+    // species-level engine so V1 cannot overwrite Habitat Change / Forest results.
+    if (v.modelRun && window.HORNBILL_SPECIES_RESULTS && window.HORNBILL_SPECIES_RESULTS.isReady()) {
+      window.HORNBILL_SPECIES_RESULTS.schedule(0);
+    }
   }
 
   function renderMapChrome(v) {
