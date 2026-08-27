@@ -1124,21 +1124,9 @@
              const diffStr = (diff > 0 ? '+' : '') + diff.toFixed(2);
              return `<div class="results-summary" style="margin-top:4px">${esc(t.climate.projectedHSI)} ${v.settings.targetYear}: <b style="color:#23281f">${v.projectedMeanHSI.toFixed(2)}</b> <span style="color:${diffColor}">(${diffStr} ${esc(t.climate.vsCurrent)})</span></div>`;
            })() : ''}
-           ${v.currentPopulation !== null ? `
-           <div class="results-summary" style="margin-top:10px">${esc(t.suitability.population)} <b style="color:#23281f">${v.currentPopulation.toLocaleString()}</b></div>
-           ${v.projectedPopulation !== null ? (() => {
-             const diff = v.projectedPopulation - v.currentPopulation;
-             const pct = v.currentPopulation ? (100 * diff / v.currentPopulation) : 0;
-             const diffColor = diff > 0 ? '#4f7942' : diff < 0 ? '#c1573a' : '#8a8f80';
-             const diffStr = (diff > 0 ? '+' : '') + diff.toLocaleString() + ' (' + (diff > 0 ? '+' : '') + pct.toFixed(1) + '%)';
-             return `<div class="results-summary" style="margin-top:4px">${esc(t.suitability.projectedPopulation)} ${v.settings.targetYear}: <b style="color:#23281f">${v.projectedPopulation.toLocaleString()}</b> <span style="color:${diffColor}">(${diffStr})</span></div>`;
-           })() : ''}
-           <div class="climate-note" style="margin-top:4px">${esc(t.suitability.populationNote)}</div>` : ''}`}
       ${v.modelRun ? `
-        <div class="climate-sub-title" style="margin-top:12px">${esc(t.climate.optimalTitle)}</div>
-        <div class="climate-stats">
-          ${v.responseCurves.filter(cv => cv.fitted).map(cv => `
-            <div class="climate-stat-row"><div class="climate-stat-label">${esc(cv.displayName)}</div><div class="climate-stat-value">${cv.optimalFmt} ${esc(cv.unit)}</div></div>`).join('')}
+        <div class="climate-note" style="margin-top:10px">
+          Habitat suitability is modelled from environmental predictors. Population growth, mortality, and bird movement are not estimated by this model.
         </div>` : ''}
     </div>`;
 
