@@ -290,9 +290,9 @@
   }
   function rgbaChange(cur,fut) {
     if(!cur&&!fut)return[0,0,0,0];
-    if(cur&&fut)return[77,116,156,185];   // Stable habitat
-    if(cur&&!fut)return[193,76,59,205];   // Loss
-    return[55,145,92,205];                // Gain
+    if(cur&&fut)return[77,116,156,235];   // Stable habitat
+    if(cur&&!fut)return[193,76,59,245];   // Loss
+    return[55,145,92,245];                // Gain
   }
   function suitableCentroid(m, future, deltas){
     const ref=E.rasters.temp,[w,s,e,n]=ref.bbox;
@@ -349,7 +349,7 @@
   function ensureModelPanes(){
     if(!E.mainMap)return;
     if(!E.mainMap.getPane('habitatModelPane')){
-      const p=E.mainMap.createPane('habitatModelPane'); p.style.zIndex=430; p.style.pointerEvents='none';
+      const p=E.mainMap.createPane('habitatModelPane'); p.style.zIndex=620; p.style.pointerEvents='none';
     }
     if(!E.mainMap.getPane('projectedPane')){
       const p=E.mainMap.createPane('projectedPane'); p.style.zIndex=680; p.style.pointerEvents='auto';
@@ -452,6 +452,7 @@
     const op=(kind==='distribution'&&E.distributionMode==='change')?0.86:(opacity||0.62);
     ensureModelPanes();
     E[key]=L.imageOverlay(canvasUrl(kind),[[s,w],[n,e]],{opacity:op,interactive:false,pane:'habitatModelPane'}).addTo(map);
+    if(E[key].bringToFront)E[key].bringToFront();
   }
 
   function ensureDistributionControl() {
@@ -476,7 +477,7 @@
     });
     E.distributionControl=new Control().addTo(E.mainMap);
     const s=document.createElement('style');
-    s.textContent='.habitat-compare-control{background:#fff;padding:4px;border-radius:6px;box-shadow:0 1px 5px rgba(0,0,0,.25);display:flex;gap:3px;align-items:center}.habitat-compare-control button{border:0;border-radius:4px;padding:5px 7px;font:600 10px sans-serif;background:#f1eee4;color:#5c6256;cursor:pointer}.habitat-compare-control button.active{background:#287f83;color:#fff}#habitatChangeLegend{display:none;gap:6px;margin-left:4px;font:600 9px sans-serif;color:#444}#habitatChangeLegend span{display:flex;align-items:center;gap:2px}#habitatChangeLegend i{width:8px;height:8px;border-radius:2px;display:inline-block}';
+    s.textContent='.habitat-compare-control{background:#fff;padding:4px;border-radius:6px;box-shadow:0 1px 5px rgba(0,0,0,.25);display:flex;gap:3px;align-items:center}.habitat-compare-control button{border:0;border-radius:4px;padding:5px 7px;font:600 10px sans-serif;background:#f1eee4;color:#5c6256;cursor:pointer}.habitat-compare-control button.active{background:#287f83;color:#fff}#habitatModeLabel{font:700 9px sans-serif;color:#287f83;margin-left:3px}#habitatChangeLegend{display:none;gap:6px;margin-left:4px;font:600 9px sans-serif;color:#444}#habitatChangeLegend span{display:flex;align-items:center;gap:2px}#habitatChangeLegend i{width:8px;height:8px;border-radius:2px;display:inline-block}';
     document.head.appendChild(s);
   }
   function updateDistributionControl(){
@@ -485,6 +486,9 @@
     const el=E.distributionControl.getContainer(),show=activeMainTab()==='distribution';
     el.style.display=show?'flex':'none';
     el.querySelectorAll('button[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===E.distributionMode));
+    let modeLabel=document.getElementById('habitatModeLabel');
+    if(!modeLabel){modeLabel=document.createElement('strong');modeLabel.id='habitatModeLabel';el.appendChild(modeLabel);}
+    modeLabel.textContent=E.distributionMode==='current'?'CURRENT':E.distributionMode==='future'?'SCENARIO':'CHANGE';
     let legend=document.getElementById('habitatChangeLegend');
     if(E.distributionMode==='change'&&show){
       if(!legend){
