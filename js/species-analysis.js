@@ -1,15 +1,17 @@
-// Species-specific habitat engine integrated into the student's existing maps.
-// No new dashboard or map is created. This script runs before app.js so it can
-// capture the two existing Leaflet map instances and add model overlays to them.
+// HornbillCast species-level map comparison engine.
+// Current = real GBIF occurrence points (owned by app.js)
+// Scenario = projected suitable-location points after the last Run
+// Change = sampled Stable/Gain/Loss cells + projected points + centroid shift arrows
 (function () {
   'use strict';
 
   const CFG = {
     seed: 2569,
     thinDeg: 0.025,
-    backgroundN: 1200,
+    backgroundN: 900,
     minPresence: 20,
-    fit: { lr: 0.22, iters: 220, l2: 0.025 },
+    gridStep: 2,
+    fit: { lr: 0.22, iters: 200, l2: 0.025 },
     paths: {
       temp: './assets/rasters/mean_temp_annual_tmd_1991-2020.tif',
       rainfall: './assets/rasters/rainfall_annual_tmd_1991-2020.tif',
@@ -19,38 +21,37 @@
   };
 
   const E = {
-    mainMap: null,
-    forestMap: null,
-    mainOverlay: null,
-    forestOverlay: null,
+    map: null,
     rasters: null,
     models: [],
+    applied: { year: 2025, temp: 0, rainfall: 0, dust: 0 },
     grids: null,
-    distributionMode: 'change',
-    distributionControl: null,
-    shiftLayer: null,
-    projectedLayer: null,
-    ran: false,
+    mode: 'current',
+    ready: false,
     running: false,
-    refreshTimer: null,
-    baselineMedian: { temp: null, rainfall: null, dust: null }
+    projectedLayer: null,
+    changeLayer: null,
+    arrowLayer: null,
+    refreshTimer: null
   };
 
-  // Capture the original maps without changing the HTML/UI.
+  // species-analysis.js loads before app.js, so capture the real Prediction Map.
   const originalLMap = L.map.bind(L);
   L.map = function (id, options) {
-    const map = originalLMap(id, options);
-    if (id === 'leafletMap') E.mainMap = map;
-    if (id === 'forestRiskMap') E.forestMap = map;
-    return map;
+    const m = originalLMap(id, options);
+    if (id === 'leafletMap') E.map = m;
+    return m;
   };
 
   function hashString(s) {
     let h = 2166136261 >>> 0;
-    for (let i = 0; i < String(s).length; i++) { h ^= String(s).charCodeAt(i); h = Math.imul(h, 16777619); }
+    for (let i = 0; i < String(s).length; i++) {
+      h ^= String(s).charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
     return h >>> 0;
   }
-  function seeded(seed) {
+  function rng(seed) {
     let a = seed >>> 0;
     return function () {
       a |= 0; a = (a + 0x6D2B79F5) | 0;
@@ -69,8 +70,8 @@
     }
     return inside;
   }
-  function pointInGeoJSON(lat, lon, geo) {
-    const g = geo && geo.type === 'Feature' ? geo.geometry : geo;
+  function inThailand(lat, lon) {
+    const g = THAILAND_BOUNDARY && THAILAND_BOUNDARY.type === 'Feature' ? THAILAND_BOUNDARY.geometry : THAILAND_BOUNDARY;
     if (!g) return true;
     if (g.type === 'Polygon') {
       if (!pointInRing(lat, lon, g.coordinates[0])) return false;
@@ -85,570 +86,427 @@
     return true;
   }
 
-  function selectedSpecies() {
-    // Read the application's real selection state when available. The Samples
-    // panel is re-rendered often, so using DOM opacity alone can briefly return
-    // stale selections and leave model overlays unchanged.
+  function selectedIds() {
     if (window.HORNBILL_SELECTION_API && typeof window.HORNBILL_SELECTION_API.selectedIds === 'function') {
-      const ids = new Set(window.HORNBILL_SELECTION_API.selectedIds());
-      return SPECIES.filter(sp => ids.has(sp.id));
+      return new Set(window.HORNBILL_SELECTION_API.selectedIds());
     }
     const rows = Array.from(document.querySelectorAll('.species-row[data-id]'));
-    if (!rows.length) return SPECIES;
-    const ids = new Set(rows.filter(el => parseFloat(el.style.opacity || '1') > 0.75).map(el => el.getAttribute('data-id')));
-    return SPECIES.filter(sp => ids.has(sp.id));
+    if (!rows.length) return new Set(SPECIES.map(s => s.id));
+    return new Set(rows.filter(el => parseFloat(el.style.opacity || '1') > 0.75).map(el => el.dataset.id));
   }
 
   function cleanPoints(sp) {
-    const raw = (sp.points || []).filter(p => Array.isArray(p) && isFinite(p[0]) && isFinite(p[1]));
-    const exact = [], seen = new Set();
-    raw.forEach(p => {
-      const k = Number(p[0]).toFixed(6) + ',' + Number(p[1]).toFixed(6);
-      if (!seen.has(k)) { seen.add(k); exact.push(p); }
-    });
-    const thai = exact.filter(p => pointInGeoJSON(p[0], p[1], THAILAND_BOUNDARY));
-    const out = [], cells = new Set();
-    thai.forEach(p => {
-      const k = Math.floor(p[0] / CFG.thinDeg) + ':' + Math.floor(p[1] / CFG.thinDeg);
-      if (!cells.has(k)) { cells.add(k); out.push(p); }
+    const seen = new Set(), cells = new Set(), out = [];
+    (sp.points || []).forEach(p => {
+      if (!Array.isArray(p) || !isFinite(p[0]) || !isFinite(p[1]) || !inThailand(p[0], p[1])) return;
+      const exact = Number(p[0]).toFixed(6) + ',' + Number(p[1]).toFixed(6);
+      if (seen.has(exact)) return;
+      seen.add(exact);
+      const cell = Math.floor(p[0] / CFG.thinDeg) + ':' + Math.floor(p[1] / CFG.thinDeg);
+      if (cells.has(cell)) return;
+      cells.add(cell);
+      out.push(p);
     });
     return out;
   }
 
-  function standardizeStats(rows) {
-    return rows[0].map((_, j) => {
-      const vals = rows.map(r => r[j]);
-      const mean = vals.reduce((a,b)=>a+b,0) / vals.length;
-      const variance = vals.reduce((a,b)=>a+(b-mean)*(b-mean),0) / vals.length;
-      return { mean, std: Math.sqrt(variance) || 1 };
-    });
-  }
-  function zrow(st, row) { return row.map((v,j)=>(v-st[j].mean)/st[j].std); }
-  function fitLogistic(X, y) {
-    const nf = X[0].length, w = new Array(nf).fill(0); let b = 0;
-    for (let it=0; it<CFG.fit.iters; it++) {
-      const gw = new Array(nf).fill(0); let gb = 0;
-      for (let i=0; i<X.length; i++) {
-        let s = b; for (let j=0;j<nf;j++) s += w[j] * X[i][j];
-        const e = sigmoid(s) - y[i];
-        for (let j=0;j<nf;j++) gw[j] += e * X[i][j];
-        gb += e;
-      }
-      for (let j=0;j<nf;j++) w[j] -= CFG.fit.lr * (gw[j] / X.length + CFG.fit.l2 * w[j]);
-      b -= CFG.fit.lr * gb / X.length;
-    }
-    return { w, b };
-  }
-  function predict(m,row){ let s=m.b; for(let j=0;j<row.length;j++) s+=m.w[j]*row[j]; return sigmoid(s); }
-  function auc(scores,y){
-    const ord=scores.map((_,i)=>i).sort((a,b)=>scores[a]-scores[b]), ranks=new Array(scores.length); let i=0;
-    while(i<ord.length){let j=i+1;while(j<ord.length&&scores[ord[j]]===scores[ord[i]])j++;const avg=(i+1+j)/2;for(let k=i;k<j;k++)ranks[ord[k]]=avg;i=j;}
-    let np=0,nn=0,sr=0;y.forEach((v,i)=>{if(v===1){np++;sr+=ranks[i];}else nn++;});
-    return np&&nn?(sr-np*(np+1)/2)/(np*nn):null;
-  }
-  function threshold(scores,y){
-    let best={t:.5,j:-9};
-    for(let t=.15;t<=.85;t+=.01){let tp=0,fn=0,tn=0,fp=0;y.forEach((v,i)=>v?(scores[i]>=t?tp++:fn++):(scores[i]>=t?fp++:tn++));const j=tp/(tp+fn||1)+tn/(tn+fp||1)-1;if(j>best.j)best={t,j};}
-    return best.t;
-  }
-
   function samplePredictors(lat, lon) {
-    const ids = ['temp','rainfall','dust','forest'], row=[];
-    for (const id of ids) {
+    if (!E.rasters) return null;
+    const row = [];
+    for (const id of ['temp', 'rainfall', 'dust', 'forest']) {
       const v = sampleRasterAt(E.rasters[id], lat, lon);
       if (v === null || !isFinite(v)) return null;
       row.push(v);
     }
     return row;
   }
+  function stats(rows) {
+    return rows[0].map((_, j) => {
+      const vals = rows.map(r => r[j]);
+      const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+      const variance = vals.reduce((a, b) => a + (b - mean) * (b - mean), 0) / vals.length;
+      return { mean, std: Math.sqrt(variance) || 1 };
+    });
+  }
+  function zrow(st, row) { return row.map((v, j) => (v - st[j].mean) / st[j].std); }
+  function fitLogistic(X, y) {
+    const w = new Array(X[0].length).fill(0); let b = 0;
+    for (let it = 0; it < CFG.fit.iters; it++) {
+      const gw = new Array(w.length).fill(0); let gb = 0;
+      for (let i = 0; i < X.length; i++) {
+        let s = b;
+        for (let j = 0; j < w.length; j++) s += w[j] * X[i][j];
+        const e = sigmoid(s) - y[i];
+        for (let j = 0; j < w.length; j++) gw[j] += e * X[i][j];
+        gb += e;
+      }
+      for (let j = 0; j < w.length; j++) w[j] -= CFG.fit.lr * (gw[j] / X.length + CFG.fit.l2 * w[j]);
+      b -= CFG.fit.lr * gb / X.length;
+    }
+    return { w, b };
+  }
+  function predict(model, row) {
+    let s = model.b;
+    for (let j = 0; j < row.length; j++) s += model.w[j] * row[j];
+    return sigmoid(s);
+  }
+  function threshold(scores, y) {
+    let best = { t: 0.5, j: -9 };
+    for (let t = 0.15; t <= 0.85; t += 0.01) {
+      let tp = 0, fn = 0, tn = 0, fp = 0;
+      y.forEach((v, i) => v ? (scores[i] >= t ? tp++ : fn++) : (scores[i] >= t ? fp++ : tn++));
+      const j = tp / (tp + fn || 1) + tn / (tn + fp || 1) - 1;
+      if (j > best.j) best = { t, j };
+    }
+    return best.t;
+  }
   function background(pres, seed) {
-    const R=seeded(seed), ref=E.rasters.temp, [w,s,e,n]=ref.bbox;
-    const used=new Set(pres.map(p=>Math.floor(p[0]/CFG.thinDeg)+':'+Math.floor(p[1]/CFG.thinDeg))), out=[];
-    let tries=0;
-    while(out.length<CFG.backgroundN && tries++<CFG.backgroundN*60){
-      const lat=s+R()*(n-s), lon=w+R()*(e-w), k=Math.floor(lat/CFG.thinDeg)+':'+Math.floor(lon/CFG.thinDeg);
-      if(used.has(k)||!pointInGeoJSON(lat,lon,THAILAND_BOUNDARY))continue;
-      const r=samplePredictors(lat,lon); if(!r)continue;
-      used.add(k); out.push(r);
+    const R = rng(seed), ref = E.rasters.temp, [w, s, e, n] = ref.bbox;
+    const used = new Set(pres.map(p => Math.floor(p[0] / CFG.thinDeg) + ':' + Math.floor(p[1] / CFG.thinDeg)));
+    const out = []; let tries = 0;
+    while (out.length < CFG.backgroundN && tries++ < CFG.backgroundN * 60) {
+      const lat = s + R() * (n - s), lon = w + R() * (e - w);
+      const k = Math.floor(lat / CFG.thinDeg) + ':' + Math.floor(lon / CFG.thinDeg);
+      if (used.has(k) || !inThailand(lat, lon)) continue;
+      const row = samplePredictors(lat, lon);
+      if (!row) continue;
+      used.add(k); out.push(row);
     }
     return out;
   }
-
   function fitSpecies(sp, index) {
-    const points=cleanPoints(sp), px=[];
-    points.forEach(p=>{const r=samplePredictors(p[0],p[1]);if(r)px.push(r);});
-    if(px.length<CFG.minPresence)return null;
-    const seed=(CFG.seed+hashString(sp.id||index))>>>0, bg=background(points,seed);
-    if(bg.length<CFG.minPresence)return null;
-    const raw=px.concat(bg), st=standardizeStats(raw);
-    const X=px.map(r=>zrow(st,r)).concat(bg.map(r=>zrow(st,r))), y=new Array(px.length).fill(1).concat(new Array(bg.length).fill(0));
-    const model=fitLogistic(X,y), scores=X.map(r=>predict(model,r));
-    const ranges=raw[0].map((_,j)=>({min:Math.min(...raw.map(r=>r[j])),max:Math.max(...raw.map(r=>r[j]))}));
-    return { sp, st, model, threshold:threshold(scores,y), trainAuc:auc(scores,y), ranges };
+    const points = cleanPoints(sp), px = [];
+    points.forEach(p => { const r = samplePredictors(p[0], p[1]); if (r) px.push(r); });
+    if (px.length < CFG.minPresence) return null;
+    const bg = background(points, (CFG.seed + hashString(sp.id || index)) >>> 0);
+    if (bg.length < CFG.minPresence) return null;
+    const raw = px.concat(bg), st = stats(raw);
+    const X = px.map(r => zrow(st, r)).concat(bg.map(r => zrow(st, r)));
+    const y = new Array(px.length).fill(1).concat(new Array(bg.length).fill(0));
+    const model = fitLogistic(X, y), scores = X.map(r => predict(model, r));
+    return { sp, st, model, threshold: threshold(scores, y) };
+  }
+
+  function currentScenario() {
+    if (window.HORNBILL_SCENARIO_API && typeof window.HORNBILL_SCENARIO_API.deltas === 'function') {
+      const d = window.HORNBILL_SCENARIO_API.deltas();
+      const year = window.HORNBILL_SCENARIO_API.currentYear ? window.HORNBILL_SCENARIO_API.currentYear() : 2025;
+      return { year: Number(year) || 2025, temp: Number(d.temp) || 0, rainfall: Number(d.rainfall) || 0, dust: Number(d.dust) || 0 };
+    }
+    return { year: 2025, temp: 0, rainfall: 0, dust: 0 };
+  }
+  function predictPair(m, lat, lon, deltas) {
+    const cur = samplePredictors(lat, lon); if (!cur) return null;
+    const fut = [cur[0] + deltas.temp, cur[1] + deltas.rainfall, cur[2] + deltas.dust, cur[3]];
+    return {
+      current: predict(m.model, zrow(m.st, cur)),
+      future: predict(m.model, zrow(m.st, fut))
+    };
   }
 
   async function loadRasters() {
-    const out={};
-    for(const [id,url] of Object.entries(CFG.paths)) out[id]=await fetchGeoTiff(url,url.split('/').pop());
+    const out = {};
+    for (const [id, url] of Object.entries(CFG.paths)) out[id] = await fetchGeoTiff(url, url.split('/').pop());
     return out;
   }
 
-  function median(vals) {
-    if (!vals.length) return null;
-    vals=vals.slice().sort((a,b)=>a-b); const m=Math.floor(vals.length/2);
-    return vals.length%2?vals[m]:(vals[m-1]+vals[m])/2;
-  }
-  function computeBaselineMedians() {
-    const pts=SPECIES.flatMap(sp=>cleanPoints(sp));
-    ['temp','rainfall','dust'].forEach(id=>{
-      E.baselineMedian[id]=median(pts.map(p=>sampleRasterAt(E.rasters[id],p[0],p[1])).filter(v=>v!==null&&isFinite(v)));
-    });
-  }
+  function buildGrids(deltas) {
+    const ids = selectedIds();
+    const models = E.models.filter(m => ids.has(m.sp.id));
+    const ref = E.rasters.temp, [w, s, e, n] = ref.bbox;
+    const speciesData = {};
+    models.forEach(m => speciesData[m.sp.id] = { model: m, cur: [], fut: [], curCount: 0, futCount: 0 });
+    const changeCells = [];
+    const step = CFG.gridStep;
 
-  function scenarioDeltas() {
-    if(window.HORNBILL_SCENARIO_API&&typeof window.HORNBILL_SCENARIO_API.deltas==='function'){
-      const d=window.HORNBILL_SCENARIO_API.deltas();
-      const year=window.HORNBILL_SCENARIO_API.currentYear?window.HORNBILL_SCENARIO_API.currentYear():2025;
-      return {year,temp:d.temp||0,rainfall:d.rainfall||0,dust:d.dust||0};
-    }
-    const yearSel=document.querySelector('select[data-field="targetYear"]');
-    const year=yearSel?Number(yearSel.value):2025;
-    const get = field => {
-      const el=document.querySelector(`input[data-onchange="climateAbsolute"][data-field="${field}"]`);
-      return el ? Number(el.value) : null;
-    };
-    const t=get('tempDelta'), r=get('rainfallDelta'), d=get('dustDelta');
-    return {year,temp:t===null||E.baselineMedian.temp===null?0:t-E.baselineMedian.temp,rainfall:r===null||E.baselineMedian.rainfall===null?0:r-E.baselineMedian.rainfall,dust:d===null||E.baselineMedian.dust===null?0:d-E.baselineMedian.dust};
-  }
-  function scenarioAbsolute(){
-    const get=field=>{const el=document.querySelector(`input[data-onchange="climateAbsolute"][data-field="${field}"]`);return el?Number(el.value):null;};
-    return [get('tempDelta'),get('rainfallDelta'),get('dustDelta')];
-  }
-  function scenarioValidForModel(m){
-    // Future controls describe shifts of the environmental rasters, not a
-    // single local observation shared by every cell. Keep the model active;
-    // extrapolation warnings remain a UI warning rather than suppressing all
-    // species results and projected habitat.
-    return true;
-  }
-  function cellCenter(r,row,col){const[w,s,e,n]=r.bbox;return[n-(row+.5)/r.height*(n-s),w+(col+.5)/r.width*(e-w)];}
-  function predictAt(m,lat,lon,deltas,onlyVar) {
-    const cur=samplePredictors(lat,lon); if(!cur)return null;
-    const fut=cur.slice();
-    const ids=['temp','rainfall','dust','forest'];
-    ids.forEach((id,j)=>{
-      if(id==='forest')return;
-      if(onlyVar && id!==onlyVar)return;
-      fut[j]+=deltas[id]||0;
-    });
-    const pc=predict(m.model,zrow(m.st,cur)), pf=predict(m.model,zrow(m.st,fut));
-    return { current:pc, future:pf, change:pf-pc };
-  }
-
-  function buildGrids() {
-    const ref=E.rasters.temp, N=ref.width*ref.height, selected=selectedSpecies(), models=E.models.filter(m=>selected.some(s=>s.id===m.sp.id));
-    const deltas=scenarioDeltas();
-    const richnessCur=new Uint8Array(N), richnessFut=new Uint8Array(N);
-    const risk={temp:new Float32Array(N),rainfall:new Float32Array(N),dust:new Float32Array(N)};
-    const speciesData=Object.fromEntries(models.map(m=>[m.sp.id,{model:m,curCount:0,futCount:0,curCells:[],futCells:[]}])) ;
-    for(let row=0;row<ref.height;row++){
-      for(let col=0;col<ref.width;col++){
-        const i=row*ref.width+col,[lat,lon]=cellCenter(ref,row,col);
-        if(!pointInGeoJSON(lat,lon,THAILAND_BOUNDARY))continue;
-        let nRiskT=0,nRiskR=0,nRiskD=0;
-        for(const m of models){
-          const full=predictAt(m,lat,lon,deltas,null); if(!full)continue;
-          const sd=speciesData[m.sp.id], valid=scenarioValidForModel(m);
-          sd.valid=valid;
-          if(full.current>=m.threshold){
-            richnessCur[i]++; sd.curCount++;
-            if(row%2===0&&col%2===0)sd.curCells.push([lat,lon,full.current]);
+    for (let row = 0; row < ref.height; row += step) {
+      const lat = n - (row + 0.5) / ref.height * (n - s);
+      for (let col = 0; col < ref.width; col += step) {
+        const lon = w + (col + 0.5) / ref.width * (e - w);
+        if (!inThailand(lat, lon)) continue;
+        let curRich = 0, futRich = 0;
+        for (const m of models) {
+          const p = predictPair(m, lat, lon, deltas); if (!p) continue;
+          const sd = speciesData[m.sp.id];
+          if (p.current >= m.threshold) {
+            curRich++; sd.curCount++; sd.cur.push([lat, lon, p.current]);
           }
-          const futureScore=(deltas.year===2025||!valid)?full.current:full.future;
-          if(futureScore>=m.threshold){
-            richnessFut[i]++; sd.futCount++;
-            if(row%2===0&&col%2===0&&valid&&deltas.year!==2025)sd.futCells.push([lat,lon,futureScore]);
-          }
-          if(valid&&deltas.year!==2025){
-            const pt=predictAt(m,lat,lon,deltas,'temp'); if(pt){risk.temp[i]+=pt.change;nRiskT++;}
-            const pr=predictAt(m,lat,lon,deltas,'rainfall'); if(pr){risk.rainfall[i]+=pr.change;nRiskR++;}
-            const pd=predictAt(m,lat,lon,deltas,'dust'); if(pd){risk.dust[i]+=pd.change;nRiskD++;}
+          const futureScore = deltas.year === 2025 ? p.current : p.future;
+          if (futureScore >= m.threshold) {
+            futRich++; sd.futCount++; sd.fut.push([lat, lon, futureScore]);
           }
         }
-        if(nRiskT)risk.temp[i]/=nRiskT;
-        if(nRiskR)risk.rainfall[i]/=nRiskR;
-        if(nRiskD)risk.dust[i]/=nRiskD;
+        if (curRich || futRich) changeCells.push([lat, lon, curRich, futRich]);
       }
     }
-    E.grids={ref,richnessCur,richnessFut,risk,deltas,maxSpecies:Math.max(1,models.length),speciesData};
+    E.grids = { deltas: { ...deltas }, speciesData, changeCells, maxSpecies: Math.max(1, models.length) };
   }
 
-  function rgbaRich(v,max) {
-    if(!v)return[0,0,0,0];
-    const t=v/Math.max(1,max);
-    return [Math.round(245-150*t),Math.round(238-70*t),Math.round(210-135*t),180];
-  }
-  function rgbaChange(cur,fut,maxSpecies) {
-    if(!cur&&!fut)return[0,0,0,0];
-    // Compare species richness, not only presence/absence of "any species".
-    // The old boolean comparison made Current and Change look almost identical
-    // whenever at least one species remained suitable in both scenarios.
-    const d=fut-cur;
-    if(d===0)return[77,116,156,220];       // Stable richness
-    const strength=Math.min(1,Math.abs(d)/Math.max(1,maxSpecies));
-    const a=Math.round(205+40*strength);
-    if(d>0)return[55,145,92,a];            // Gain
-    return[193,76,59,a];                   // Loss
-  }
-  function suitableCentroid(m, future, deltas){
-    const ref=E.rasters.temp,[w,s,e,n]=ref.bbox;
-    let sw=0,slat=0,slon=0;
-    const step=2;
-    for(let row=0;row<ref.height;row+=step){
-      const lat=n-(row+.5)/ref.height*(n-s);
-      for(let col=0;col<ref.width;col+=step){
-        const lon=w+(col+.5)/ref.width*(e-w);
-        if(!pointInGeoJSON(lat,lon,THAILAND_BOUNDARY))continue;
-        const p=predictAt(m,lat,lon,deltas,null); if(!p)continue;
-        const score=future?p.future:p.current;
-        if(score<m.threshold)continue;
-        const wt=Math.max(0.001,score-m.threshold+0.001);
-        sw+=wt;slat+=lat*wt;slon+=lon*wt;
+  function ensurePanes() {
+    if (!E.map) return;
+    const specs = [
+      ['changePointPane', 640],
+      ['projectedPointPane', 690],
+      ['shiftArrowPane', 710]
+    ];
+    specs.forEach(([name, z]) => {
+      if (!E.map.getPane(name)) {
+        const p = E.map.createPane(name); p.style.zIndex = z; p.style.pointerEvents = 'auto';
       }
-    }
-    return sw?{lat:slat/sw,lon:slon/sw}:null;
+    });
   }
-  function rgbaRisk(change) {
-    if(Math.abs(change)<0.005)return[0,0,0,0];
-    // Green = suitability improves, red = suitability declines.
-    const a=Math.min(220,80+Math.round(Math.abs(change)*900));
-    return change>0?[62,132,85,a]:[185,82,67,a];
+  function clearLayer(key) {
+    const layer = E[key];
+    if (E.map && layer && E.map.hasLayer(layer)) E.map.removeLayer(layer);
+    E[key] = null;
   }
-  function canvasUrl(kind) {
-    const g=E.grids, r=g.ref, c=document.createElement('canvas'); c.width=r.width;c.height=r.height;
-    const ctx=c.getContext('2d'), img=ctx.createImageData(r.width,r.height);
-    for(let i=0;i<r.width*r.height;i++){
-      let q;
-      if(kind==='distribution'){
-        if(E.distributionMode==='current') q=rgbaRich(g.richnessCur[i],g.maxSpecies);
-        else if(E.distributionMode==='future') q=rgbaRich(g.richnessFut[i],g.maxSpecies);
-        else q=rgbaChange(g.richnessCur[i],g.richnessFut[i],g.maxSpecies);
-      }
-      else q=rgbaRisk(g.risk[kind][i]);
-      const p=i*4;img.data[p]=q[0];img.data[p+1]=q[1];img.data[p+2]=q[2];img.data[p+3]=q[3];
-    }
-    ctx.putImageData(img,0,0); return c.toDataURL('image/png');
+  function clearModelLayers() {
+    clearLayer('projectedLayer');
+    clearLayer('changeLayer');
+    clearLayer('arrowLayer');
   }
-
-  function activeMainTab() {
-    if(document.getElementById('mapTabRainfall')?.classList.contains('active'))return'rainfall';
-    if(document.getElementById('mapTabTemperature')?.classList.contains('active'))return'temp';
-    if(document.getElementById('mapTabDust')?.classList.contains('active'))return'dust';
-    return'distribution';
-  }
-  function activeForestTab() {
-    if(document.getElementById('riskTabTemperature')?.classList.contains('active'))return'temp';
-    if(document.getElementById('riskTabDust')?.classList.contains('active'))return'dust';
-    return'rainfall';
-  }
-
-  function ensureModelPanes(map){
-    if(!map)return;
-    if(!map.getPane('habitatModelPane')){
-      const p=map.createPane('habitatModelPane'); p.style.zIndex=620; p.style.pointerEvents='none';
-    }
-    // Projected points and shift arrows only exist on the main Prediction Map.
-    if(map===E.mainMap){
-      if(!map.getPane('projectedPane')){
-        const p=map.createPane('projectedPane'); p.style.zIndex=680; p.style.pointerEvents='auto';
-      }
-      if(!map.getPane('shiftPane')){
-        const p=map.createPane('shiftPane'); p.style.zIndex=700; p.style.pointerEvents='auto';
-      }
-    }
-  }
-
-  function clearProjectedLayer(){
-    if(E.mainMap&&E.projectedLayer&&E.mainMap.hasLayer(E.projectedLayer))E.mainMap.removeLayer(E.projectedLayer);
-    E.projectedLayer=null;
-  }
-  function setOccurrenceVisible(visible){
-    if(window.HORNBILL_MAP_API&&typeof window.HORNBILL_MAP_API.setOccurrenceVisible==='function'){
+  function setOccurrences(visible) {
+    if (window.HORNBILL_MAP_API && typeof window.HORNBILL_MAP_API.setOccurrenceVisible === 'function') {
       window.HORNBILL_MAP_API.setOccurrenceVisible(visible);
     }
   }
-  function setOccurrenceMode(mode){
-    if(window.HORNBILL_MAP_API&&typeof window.HORNBILL_MAP_API.setOccurrenceMode==='function'){
-      window.HORNBILL_MAP_API.setOccurrenceMode(mode);
+
+  function spacedTop(cells, target) {
+    if (!cells || !cells.length || target <= 0) return [];
+    const ranked = cells.slice().sort((a, b) => b[2] - a[2]);
+    const out = [], minDist = 0.18;
+    for (const p of ranked) {
+      if (out.every(q => Math.hypot(p[0] - q[0], p[1] - q[1]) >= minDist)) out.push(p);
+      if (out.length >= target) break;
     }
-  }
-  function representativeCells(cells,target){
-    if(!cells||!cells.length||target<=0)return[];
-    const n=Math.min(target,cells.length);
-    // Prefer the most suitable future cells, but keep spatial separation so
-    // Scenario visibly represents a new habitat pattern instead of reproducing
-    // the original occurrence cloud.
-    const ranked=cells.slice().sort((a,b)=>b[2]-a[2]),out=[];
-    const minDist=0.22;
-    for(const p of ranked){
-      if(out.every(q=>Math.hypot(p[0]-q[0],p[1]-q[1])>=minDist))out.push(p);
-      if(out.length>=n)break;
-    }
-    if(out.length<n){
-      for(const p of ranked){
-        if(!out.includes(p))out.push(p);
-        if(out.length>=n)break;
+    if (out.length < target) {
+      for (const p of ranked) {
+        if (!out.includes(p)) out.push(p);
+        if (out.length >= target) break;
       }
     }
     return out;
   }
-  function drawProjectedPoints(){
-    clearProjectedLayer();
-    // 2025 is the observed/current baseline. Even if the Compare control is
-    // still on Scenario/Change after switching years, keep real GBIF points
-    // visible and do not replace them with projected points.
-    if(!E.mainMap||!E.grids||activeMainTab()!=='distribution'||E.distributionMode==='current'||E.grids.deltas.year===2025){
-      setOccurrenceVisible(true);return;
-    }
-    setOccurrenceVisible(false);
-    const th=document.getElementById('langThBtn')?.classList.contains('active');
-    const grp=L.layerGroup();
-    Object.values(E.grids.speciesData||{}).forEach(sd=>{
-      if(!sd.valid||E.grids.deltas.year===2025)return;
-      const m=sd.model,baseObs=cleanPoints(m.sp).length;
-      const baseRep=Math.max(10,Math.min(120,Math.round(Math.sqrt(Math.max(1,baseObs))*5)));
-      const ratio=sd.curCount>0?sd.futCount/sd.curCount:0;
-      const target=Math.max(0,Math.min(180,Math.round(baseRep*ratio)));
-      representativeCells(sd.futCells,target).forEach(p=>{
-        L.circleMarker([p[0],p[1]],{
-          pane:'projectedPane',radius:5,color:'#f2c230',weight:3,fillColor:m.sp.color||'#333',fillOpacity:.92
-        }).bindTooltip((th?m.sp.thai:m.sp.common)+' — '+(th?'ตำแหน่งพื้นที่เหมาะสมที่คาดการณ์':'projected suitable location')+' (HSI '+p[2].toFixed(2)+')')
-          .addTo(grp);
+  function drawProjected() {
+    clearLayer('projectedLayer');
+    if (!E.map || !E.grids || E.grids.deltas.year === 2025) return;
+    ensurePanes();
+    const group = L.layerGroup();
+    const th = document.getElementById('langThBtn')?.classList.contains('active');
+    Object.values(E.grids.speciesData).forEach(sd => {
+      const m = sd.model;
+      const base = Math.max(10, Math.min(55, Math.round(Math.sqrt(Math.max(1, cleanPoints(m.sp).length)) * 3)));
+      const ratio = sd.curCount ? sd.futCount / sd.curCount : 0;
+      const target = Math.max(0, Math.min(120, Math.round(base * Math.max(0, Math.min(3, ratio)))));
+      spacedTop(sd.fut, target).forEach(p => {
+        L.circleMarker([p[0], p[1]], {
+          pane: 'projectedPointPane', radius: 5.5,
+          color: '#f2c230', weight: 3,
+          fillColor: m.sp.color || '#333', fillOpacity: 0.95
+        }).bindTooltip((th ? m.sp.thai : m.sp.common) + ' — ' + (th ? 'ตำแหน่งพื้นที่เหมาะสมที่คาดการณ์' : 'projected suitable location') + ' (HSI ' + p[2].toFixed(2) + ')')
+          .addTo(group);
       });
     });
-    grp.addTo(E.mainMap);E.projectedLayer=grp;
-    // Change is a comparison view: keep observed/current GBIF points visible
-    // underneath the yellow-ring projected points so displacement is obvious.
-    if(E.distributionMode==='change')setOccurrenceVisible(true);
+    group.addTo(E.map); E.projectedLayer = group;
   }
 
-  function clearShiftLayer(){
-    if(E.mainMap&&E.shiftLayer&&E.mainMap.hasLayer(E.shiftLayer))E.mainMap.removeLayer(E.shiftLayer);
-    E.shiftLayer=null;
+  function sampleEven(arr, max) {
+    if (arr.length <= max) return arr;
+    const out = [];
+    for (let i = 0; i < max; i++) out.push(arr[Math.floor((i + 0.5) * arr.length / max)]);
+    return out;
   }
-  function drawShiftArrows(){
-    clearShiftLayer();
-    if(!E.mainMap||!E.ran||!E.grids||activeMainTab()!=='distribution'||E.distributionMode!=='change'||E.grids.deltas.year===2025)return;
-    const selected=selectedSpecies(),models=E.models.filter(m=>selected.some(s=>s.id===m.sp.id)),del=E.grids.deltas;
-    const grp=L.layerGroup();
-    models.forEach(m=>{
-      const a=suitableCentroid(m,false,del),b=suitableCentroid(m,true,del);
-      if(!a||!b)return;
-      const color=m.sp.color||'#333';
-      const line=L.polyline([[a.lat,a.lon],[b.lat,b.lon]],{pane:'shiftPane',color,weight:2.2,opacity:.9,dashArray:'6,4'}).addTo(grp);
-      const ang=Math.atan2(b.lat-a.lat,(b.lon-a.lon)*Math.cos(b.lat*Math.PI/180));
-      const len=.22,spread=.55,cc=Math.max(.2,Math.cos(b.lat*Math.PI/180));
-      const p1=[b.lat-len*Math.sin(ang-spread),b.lon-len*Math.cos(ang-spread)/cc];
-      const p2=[b.lat-len*Math.sin(ang+spread),b.lon-len*Math.cos(ang+spread)/cc];
-      L.polyline([p1,[b.lat,b.lon],p2],{pane:'shiftPane',color,weight:2.2,opacity:.9}).addTo(grp);
-      const th=document.getElementById('langThBtn')?.classList.contains('active');
-      line.bindTooltip((th?m.sp.thai:m.sp.common)+': '+(th?'ทิศทางการเลื่อนของศูนย์กลางพื้นที่เหมาะสม':'projected suitable-area centroid shift'));
+  function drawChangePoints() {
+    clearLayer('changeLayer');
+    if (!E.map || !E.grids || E.grids.deltas.year === 2025) return;
+    ensurePanes();
+    const stable = [], gain = [], loss = [];
+    E.grids.changeCells.forEach(c => {
+      const d = c[3] - c[2];
+      if (d > 0) gain.push(c);
+      else if (d < 0) loss.push(c);
+      else stable.push(c);
     });
-    grp.addTo(E.mainMap);E.shiftLayer=grp;
+    const group = L.layerGroup();
+    const add = (cells, fill, name, max) => sampleEven(cells, max).forEach(p => {
+      L.circleMarker([p[0], p[1]], {
+        pane: 'changePointPane', radius: name === 'Stable' ? 3 : 4,
+        color: '#ffffff', weight: 1,
+        fillColor: fill, fillOpacity: name === 'Stable' ? 0.58 : 0.88
+      }).bindTooltip(name + ': ' + p[2] + ' → ' + p[3] + ' suitable species').addTo(group);
+    });
+    add(stable, '#4d749c', 'Stable', 180);
+    add(gain, '#37915c', 'Gain', 260);
+    add(loss, '#c14c3b', 'Loss', 260);
+    group.addTo(E.map); E.changeLayer = group;
   }
 
-  function removeOverlay(map,key) {
-    const layer=E[key];
-    if(map&&layer&&map.hasLayer(layer))map.removeLayer(layer);
-    E[key]=null;
+  function centroid(cells) {
+    if (!cells || !cells.length) return null;
+    let sw = 0, lat = 0, lon = 0;
+    cells.forEach(p => { const w = Math.max(0.01, p[2]); sw += w; lat += p[0] * w; lon += p[1] * w; });
+    return sw ? { lat: lat / sw, lon: lon / sw } : null;
   }
-  function addOverlay(map,key,kind,opacity) {
-    if(!map||!E.grids)return;
-    removeOverlay(map,key);
-    const r=E.grids.ref,[w,s,e,n]=r.bbox;
-    const op=(kind==='distribution'&&E.distributionMode==='change')?0.86:(opacity||0.62);
-    ensureModelPanes(map);
-    E[key]=L.imageOverlay(canvasUrl(kind),[[s,w],[n,e]],{opacity:op,interactive:false,pane:'habitatModelPane'}).addTo(map);
-    if(E[key].bringToFront)E[key].bringToFront();
+  function drawArrows() {
+    clearLayer('arrowLayer');
+    if (!E.map || !E.grids || E.grids.deltas.year === 2025) return;
+    ensurePanes();
+    const group = L.layerGroup();
+    Object.values(E.grids.speciesData).forEach(sd => {
+      const a = centroid(sd.cur), b = centroid(sd.fut); if (!a || !b) return;
+      const color = sd.model.sp.color || '#333';
+      const line = L.polyline([[a.lat, a.lon], [b.lat, b.lon]], {
+        pane: 'shiftArrowPane', color, weight: 2.5, opacity: 0.95, dashArray: '7,5'
+      }).addTo(group);
+      const ang = Math.atan2(b.lat - a.lat, (b.lon - a.lon) * Math.cos(b.lat * Math.PI / 180));
+      const len = 0.18, spread = 0.55, cc = Math.max(0.2, Math.cos(b.lat * Math.PI / 180));
+      const p1 = [b.lat - len * Math.sin(ang - spread), b.lon - len * Math.cos(ang - spread) / cc];
+      const p2 = [b.lat - len * Math.sin(ang + spread), b.lon - len * Math.cos(ang + spread) / cc];
+      L.polyline([p1, [b.lat, b.lon], p2], { pane: 'shiftArrowPane', color, weight: 2.5, opacity: 0.95 }).addTo(group);
+      line.bindTooltip(sd.model.sp.common + ': suitable-area centroid shift');
+    });
+    group.addTo(E.map); E.arrowLayer = group;
   }
 
-  function ensureDistributionControl() {
-    if(!E.mainMap)return;
-    let bar=document.getElementById('habitatCompareBar');
-    if(!bar){
-      const mapEl=document.getElementById('leafletMap');
-      if(!mapEl||!mapEl.parentElement)return;
-      bar=document.createElement('div');
-      bar.id='habitatCompareBar';
-      bar.className='habitat-compare-bar';
-      bar.innerHTML='<button data-mode="current">Current</button><button data-mode="future">Scenario</button><button data-mode="change">Change</button><strong id="habitatModeLabel"></strong><div id="habitatChangeLegend"><span><i style="background:#4d749c"></i>Stable</span><span><i style="background:#37915c"></i>Gain</span><span><i style="background:#c14c3b"></i>Loss</span><span><i style="background:#fff;border:2px solid #777;border-radius:50%"></i>Current bird</span><span><i style="background:#37915c;border:3px solid #f2c230;border-radius:50%"></i>Projected</span></div>';
-      mapEl.parentElement.insertBefore(bar,mapEl);
-      L.DomEvent.disableClickPropagation(bar);
-      L.DomEvent.disableScrollPropagation(bar);
-      bar.addEventListener('click',ev=>{
-        const b=ev.target.closest('button[data-mode]');
-        if(!b)return;
-        E.distributionMode=b.dataset.mode;
-        if(activeMainTab()!=='distribution'){
-          const dist=document.getElementById('mapTabDist');
-          if(dist)dist.click();
-          setTimeout(()=>{updateDistributionControl();scheduleRefresh(30);},40);
-        }else{
-          updateDistributionControl();
-          scheduleRefresh(20);
+  function activeMainTab() {
+    if (document.getElementById('mapTabRainfall')?.classList.contains('active')) return 'rainfall';
+    if (document.getElementById('mapTabTemperature')?.classList.contains('active')) return 'temperature';
+    if (document.getElementById('mapTabDust')?.classList.contains('active')) return 'dust';
+    return 'distribution';
+  }
+
+  function ensureBar() {
+    const mapEl = document.getElementById('leafletMap');
+    if (!mapEl || !mapEl.parentElement) return null;
+    let bar = document.getElementById('habitatCompareBar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'habitatCompareBar';
+      bar.className = 'habitat-compare-bar';
+      bar.innerHTML = '<button data-mode="current">Current</button><button data-mode="scenario">Scenario</button><button data-mode="change">Change</button><strong id="habitatModeLabel"></strong><div id="habitatCompareLegend"><span><i class="stable"></i>Stable</span><span><i class="gain"></i>Gain</span><span><i class="loss"></i>Loss</span><span><i class="projected"></i>Projected</span></div>';
+      mapEl.parentElement.insertBefore(bar, mapEl);
+      bar.addEventListener('click', e => {
+        const btn = e.target.closest('button[data-mode]'); if (!btn) return;
+        if (activeMainTab() !== 'distribution') {
+          const tab = document.getElementById('mapTabDist'); if (tab) tab.click();
+          setTimeout(() => { E.mode = btn.dataset.mode; renderView(); }, 60);
+        } else {
+          E.mode = btn.dataset.mode; renderView();
         }
       });
-      if(!document.getElementById('habitatCompareStyle')){
-        const s=document.createElement('style'); s.id='habitatCompareStyle';
-        s.textContent='.habitat-compare-bar{display:flex;align-items:center;gap:6px;padding:6px 8px;margin:0 0 6px 0;background:#f7f3e8;border:1px solid #e7e0cf;border-radius:6px}.habitat-compare-bar button{border:0;border-radius:4px;padding:6px 12px;font:600 11px sans-serif;background:#eee9dc;color:#5c6256;cursor:pointer}.habitat-compare-bar button.active{background:#287f83;color:#fff}.habitat-compare-bar.inactive-map-mode{opacity:.82}.habitat-compare-bar.inactive-map-mode:after{content:"ใช้กับ Hornbill Distribution";margin-left:auto;font:600 10px sans-serif;color:#8a8f80}#habitatModeLabel{font:700 10px sans-serif;color:#287f83;margin-left:4px}#habitatChangeLegend{display:none;gap:8px;margin-left:auto;font:600 10px sans-serif;color:#444}#habitatChangeLegend span{display:flex;align-items:center;gap:3px}#habitatChangeLegend i{width:9px;height:9px;border-radius:2px;display:inline-block}';
-        document.head.appendChild(s);
+      if (!document.getElementById('habitatCompareCss')) {
+        const st = document.createElement('style'); st.id = 'habitatCompareCss';
+        st.textContent = '.habitat-compare-bar{display:flex;align-items:center;gap:6px;padding:6px 8px;margin:0 0 6px;background:#f7f3e8;border:1px solid #e7e0cf;border-radius:6px}.habitat-compare-bar button{border:0;border-radius:4px;padding:6px 12px;font:600 11px sans-serif;background:#eee9dc;color:#5c6256;cursor:pointer}.habitat-compare-bar button.active{background:#287f83;color:#fff}#habitatModeLabel{font:700 10px sans-serif;color:#287f83;margin-left:3px}#habitatCompareLegend{display:none;align-items:center;gap:8px;margin-left:auto;font:600 10px sans-serif;color:#444}#habitatCompareLegend span{display:flex;align-items:center;gap:3px}#habitatCompareLegend i{display:inline-block;width:9px;height:9px;border-radius:50%}.stable{background:#4d749c}.gain{background:#37915c}.loss{background:#c14c3b}.projected{background:#37915c;border:3px solid #f2c230;box-sizing:content-box}';
+        document.head.appendChild(st);
       }
     }
-    E.distributionControl={getContainer:()=>bar};
-  }
-  function updateDistributionControl(){
-    ensureDistributionControl();
-    if(!E.distributionControl)return;
-    const el=E.distributionControl.getContainer(),show=true;
-    el.style.display='flex';
-    el.classList.toggle('inactive-map-mode',activeMainTab()!=='distribution');
-    el.querySelectorAll('button[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===E.distributionMode));
-    const modeLabel=el.querySelector('#habitatModeLabel');
-    if(modeLabel)modeLabel.textContent=E.distributionMode==='current'?'CURRENT':E.distributionMode==='future'?'SCENARIO':'CHANGE';
-    const legend=el.querySelector('#habitatChangeLegend');
-    if(legend)legend.style.display=(E.distributionMode==='change'&&show)?'flex':'none';
+    return bar;
   }
 
-  function updateNotes(mainKind,forestKind) {
-    const note=document.getElementById('mapRealNote');
-    if(note&&E.ran){
-      if(mainKind==='distribution'){
-        if(E.distributionMode==='current')note.textContent='Current: real GBIF occurrence points over modelled baseline suitable habitat.';
-        else if(E.distributionMode==='future'){
-          const invalid=Object.values(E.grids.speciesData||{}).some(sd=>sd.valid===false);
-          note.textContent=invalid
-            ? 'Scenario projection is unavailable for species whose inputs fall outside their fitted data range; unsupported extrapolations are not plotted.'
-            : 'Scenario: representative projected suitable-location points. Point count changes with modelled suitable-area change; these are not predicted bird counts.';
+  function updateBar() {
+    const bar = ensureBar(); if (!bar) return;
+    bar.style.display = 'flex';
+    bar.querySelectorAll('button[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === E.mode));
+    const label = bar.querySelector('#habitatModeLabel'); if (label) label.textContent = E.mode.toUpperCase();
+    const legend = bar.querySelector('#habitatCompareLegend'); if (legend) legend.style.display = E.mode === 'change' ? 'flex' : 'none';
+  }
+  function updateNote() {
+    const n = document.getElementById('mapRealNote'); if (!n || activeMainTab() !== 'distribution') return;
+    if (E.mode === 'current') n.textContent = 'Current: real GBIF occurrence points.';
+    else if (E.mode === 'scenario') n.innerHTML = 'Scenario: <b style="color:#b58a00">yellow-ring points</b> are projected suitable locations after the last Run; they are not bird counts.';
+    else n.innerHTML = 'Change: <b style="color:#4d749c">blue = stable</b> · <b style="color:#37915c">green = gain</b> · <b style="color:#c14c3b">red = loss</b>. Yellow-ring points are projected suitable locations; dashed arrows show centroid shift.';
+  }
+
+  function renderView() {
+    updateBar();
+    if (!E.map || activeMainTab() !== 'distribution') return;
+    clearModelLayers();
+    if (!E.ready || !E.grids || E.grids.deltas.year === 2025 || E.mode === 'current') {
+      setOccurrences(true);
+      E.mode = 'current';
+      updateBar(); updateNote();
+      return;
+    }
+    if (E.mode === 'scenario') {
+      setOccurrences(false);
+      drawProjected();
+    } else if (E.mode === 'change') {
+      setOccurrences(false);
+      drawChangePoints();
+      drawProjected();
+      drawArrows();
+    }
+    updateBar(); updateNote();
+  }
+
+  async function runEngine(forceBaseline) {
+    if (E.running) return;
+    E.running = true;
+    try {
+      if (!E.rasters) E.rasters = await loadRasters();
+      if (!E.models.length) {
+        for (let i = 0; i < SPECIES.length; i++) {
+          const m = fitSpecies(SPECIES[i], i); if (m) E.models.push(m);
         }
-        else note.innerHTML='Change view: <b>hollow grey points = current GBIF locations</b>; <b style="color:#b58a00">yellow-ring points = projected suitable locations</b>. <b style="color:#4d749c">Blue = stable</b> · <b style="color:#37915c">Green = gain</b> · <b style="color:#c14c3b">Red = loss</b>; dashed arrows show suitable-area centroid shift.';
       }
-      else note.textContent=`Model overlay: ${mainKind==='temp'?'Temperature':mainKind==='rainfall'?'Rainfall':'PM2.5'} scenario effect on habitat suitability. Green = suitability increase; red = decrease.`;
+      const d = forceBaseline ? { year: 2025, temp: 0, rainfall: 0, dust: 0 } : currentScenario();
+      E.applied = { ...d };
+      buildGrids(E.applied);
+      E.ready = true;
+      E.mode = E.applied.year === 2025 ? 'current' : 'scenario';
+      renderView();
+      setTimeout(renderView, 900);
+      setTimeout(renderView, 2600);
+    } catch (err) {
+      console.error('Species habitat engine failed:', err);
+    } finally {
+      E.running = false;
     }
-    const f=document.getElementById('forestRiskNote');
-    if(f&&E.ran)f.textContent=`Forest map + modelled ${forestKind==='temp'?'Temperature':forestKind==='rainfall'?'Rainfall':'PM2.5'} suitability change. Green = increase; red = decrease.`;
   }
 
-  function refreshMaps() {
-    if(!E.ran||!E.grids)return;
-    ensureModelPanes(E.mainMap);
-    ensureModelPanes(E.forestMap);
-    // Rendering Current / Scenario / Change must use the scenario snapshot
-    // calculated by the last Run. Rebuilding here made every compare-button
-    // click silently recalculate from live controls and could make the three
-    // modes appear identical.
-    const mainKind=activeMainTab();
-    updateDistributionControl();
-    addOverlay(E.mainMap,'mainOverlay',mainKind,mainKind==='distribution'?0.58:0.48);
-    if(mainKind==='distribution'&&E.distributionMode==='change')drawShiftArrows();else clearShiftLayer();
-    if(mainKind==='distribution'&&E.grids.deltas.year!==2025&&E.distributionMode==='future'){
-      setOccurrenceMode('normal');
-      drawProjectedPoints();
-    } else if(mainKind==='distribution'&&E.grids.deltas.year!==2025&&E.distributionMode==='change'){
-      setOccurrenceVisible(true);
-      setOccurrenceMode('compare');
-      drawProjectedPoints();
-    } else {
-      clearProjectedLayer();
-      setOccurrenceVisible(true);
-      setOccurrenceMode('normal');
-    }
-    const forestKind=activeForestTab();
-    addOverlay(E.forestMap,'forestOverlay',forestKind,0.46);
-    updateNotes(mainKind,forestKind);
-  }
-  function scheduleRefresh(delay,allowRebuild) {
+  function scheduleRender(delay) {
     clearTimeout(E.refreshTimer);
-    E.refreshTimer=setTimeout(()=>{
-      try{
-        // refreshMaps renders E.grids only. Grid rebuilding is performed solely
-        // by runEngine(), so draft scenario edits cannot change calculations.
-        refreshMaps();
-      }catch(err){console.error('Species map overlay:',err);}
-    },delay||120);
-  }
-
-  async function runEngine() {
-    if(E.running)return;
-    E.running=true;
-    try{
-      if(!E.rasters){E.rasters=await loadRasters();computeBaselineMedians();}
-      E.models=[];
-      for(let i=0;i<SPECIES.length;i++){const m=fitSpecies(SPECIES[i],i);if(m)E.models.push(m);}
-      E.ran=E.models.length>0;
-      if(E.ran){
-        buildGrids();
-        scheduleRefresh(120);
-        // The original Run UI continues rendering progress after this engine
-        // finishes; re-apply the completed result after that animation settles.
-        scheduleRefresh(2800);
-      }
-    } catch(err) {
-      console.error('Species habitat engine failed:',err);
-    } finally { E.running=false; }
+    E.refreshTimer = setTimeout(renderView, delay == null ? 80 : delay);
   }
 
   window.HORNBILL_SPECIES_MAPS = {
-    refresh: (delay) => scheduleRefresh(delay == null ? 0 : delay),
-    run: () => runEngine()
+    refresh: delay => scheduleRender(delay),
+    run: () => runEngine(false)
   };
 
-  // Keep calculations tied to the student's original controls.
   document.addEventListener('click', e => {
-    const el=e.target.closest('[data-action]'); if(!el)return;
-    const action=el.getAttribute('data-action');
-    // app.js re-renders immediately when Run is clicked. Wait until that render
-    // has committed the current draft scenario to application state/DOM, then
-    // rebuild the habitat grids from exactly those values.
-    if(action==='runModel') setTimeout(runEngine,520);
-    if(action==='setMapTab'||action==='setForestRiskTab'||action==='toggleSpecies') scheduleRefresh(180);
-  });
-  document.addEventListener('change', e => {
-    const el=e.target;
-    if(el.matches('select[data-field="targetYear"]')){
-      const year=Number(el.value);
-      if(year===2025){
-        // Returning to the baseline must always restore the real occurrence map.
-        // Do not leave the Compare control in Change/Scenario with hidden GBIF
-        // points or old shift arrows from a future-year run.
-        E.distributionMode='current';
-        clearProjectedLayer();
-        clearShiftLayer();
-        setOccurrenceVisible(true);
-        updateDistributionControl();
-        setTimeout(()=>runEngine(),120);
-      } else {
-        // Future-year values are drafts until Run. Keep the last computed result
-        // visible, but never hide the real points simply because the year changed.
-        clearProjectedLayer();
-        clearShiftLayer();
-        setOccurrenceVisible(true);
-        if(activeMainTab()==='distribution') {
-          E.distributionMode='current';
-          updateDistributionControl();
-          scheduleRefresh(80,false);
-        }
-      }
+    const action = e.target.closest('[data-action]')?.getAttribute('data-action');
+    if (action === 'runModel') setTimeout(() => runEngine(false), 520);
+    if (action === 'setMapTab') setTimeout(renderView, 100);
+    if (action === 'toggleSpecies') {
+      setTimeout(() => {
+        if (E.ready) { buildGrids(E.applied); renderView(); }
+      }, 120);
     }
   });
 
-  // Re-render the last computed overlays after DOM redraws, without using
-  // newly edited future scenario values.
-  const obs=new MutationObserver(()=>{if(E.ran)scheduleRefresh(90,false);});
-  document.addEventListener('DOMContentLoaded',()=>{
-    ensureDistributionControl();
-    const app=document.getElementById('app'); if(app)obs.observe(app,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style']});
-    // Prepare the baseline habitat grids automatically so 2025 Current/Change
-    // views are available without requiring a manual Run click.
-    setTimeout(()=>runEngine(),300);
+  document.addEventListener('change', e => {
+    const el = e.target;
+    if (el.matches('select[data-field="targetYear"]')) {
+      const year = Number(el.value);
+      clearModelLayers();
+      setOccurrences(true);
+      E.mode = 'current';
+      updateBar(); updateNote();
+      if (year === 2025) setTimeout(() => runEngine(true), 120);
+      // Future-year numeric edits are drafts and are not calculated until Run.
+    }
+  });
+
+  const observer = new MutationObserver(() => {
+    ensureBar();
+    if (E.ready) scheduleRender(100);
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    ensureBar();
+    const app = document.getElementById('app');
+    if (app) observer.observe(app, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style'] });
+    setTimeout(() => runEngine(true), 350);
   });
 })();
