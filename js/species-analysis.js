@@ -1,7 +1,7 @@
 // HornbillCast species-level map comparison engine.
 // Current = real GBIF occurrence points (owned by app.js)
 // Scenario = projected suitable-location points after the last Run
-// Change = sampled Stable/Gain/Loss cells + projected points + centroid shift arrows
+// Change = Stable/Gain/Loss/Turnover habitat AREAS + projected points + centroid shift arrows
 (function () {
   'use strict';
 
@@ -216,42 +216,58 @@
     const ref = E.rasters.temp, [w, s, e, n] = ref.bbox;
     const speciesData = {};
     models.forEach(m => speciesData[m.sp.id] = { model: m, cur: [], fut: [], curCount: 0, futCount: 0 });
-    const changeCells = [];
-    const step = CFG.gridStep;
 
-    for (let row = 0; row < ref.height; row += step) {
+    const step = CFG.gridStep;
+    const gridWidth = Math.ceil(ref.width / step);
+    const gridHeight = Math.ceil(ref.height / step);
+    const changePixels = new Uint8Array(gridWidth * gridHeight);
+    const changeCounts = { stable: 0, gain: 0, loss: 0, turnover: 0 };
+
+    for (let row = 0, gy = 0; row < ref.height; row += step, gy++) {
       const lat = n - (row + 0.5) / ref.height * (n - s);
-      for (let col = 0; col < ref.width; col += step) {
+      for (let col = 0, gx = 0; col < ref.width; col += step, gx++) {
         const lon = w + (col + 0.5) / ref.width * (e - w);
         if (!inThailand(lat, lon)) continue;
-        let curRich = 0, futRich = 0;
-        for (const m of models) {
+        let curRich = 0, futRich = 0, curMask = 0, futMask = 0;
+        for (let mi = 0; mi < models.length; mi++) {
+          const m = models[mi];
           const p = predictPair(m, lat, lon, deltas); if (!p) continue;
           const sd = speciesData[m.sp.id];
           if (p.current >= m.threshold) {
-            curRich++; sd.curCount++; sd.cur.push([lat, lon, p.current]);
+            curRich++; curMask |= (1 << mi); sd.curCount++; sd.cur.push([lat, lon, p.current]);
           }
           const futureScore = deltas.year === 2025 ? p.current : p.future;
           if (futureScore >= m.threshold) {
-            futRich++; sd.futCount++; sd.fut.push([lat, lon, futureScore]);
+            futRich++; futMask |= (1 << mi); sd.futCount++; sd.fut.push([lat, lon, futureScore]);
           }
         }
-        if (curRich || futRich) changeCells.push([lat, lon, curRich, futRich]);
+        if (!(curRich || futRich)) continue;
+
+        let cls = 0;
+        // Stable means the SAME selected species remain suitable, not merely the same count.
+        if (curMask === futMask) { cls = 1; changeCounts.stable++; }
+        else if (futRich > curRich) { cls = 2; changeCounts.gain++; }
+        else if (futRich < curRich) { cls = 3; changeCounts.loss++; }
+        else { cls = 4; changeCounts.turnover++; } // equal richness, different species composition
+        changePixels[gy * gridWidth + gx] = cls;
       }
     }
-    E.grids = { deltas: { ...deltas }, speciesData, changeCells, maxSpecies: Math.max(1, models.length) };
+    E.grids = {
+      deltas: { ...deltas }, speciesData, maxSpecies: Math.max(1, models.length),
+      changePixels, changeCounts, gridWidth, gridHeight, bounds: [w, s, e, n]
+    };
   }
 
   function ensurePanes() {
     if (!E.map) return;
     const specs = [
-      ['changePointPane', 640],
+      ['changeAreaPane', 610],
       ['projectedPointPane', 690],
       ['shiftArrowPane', 710]
     ];
     specs.forEach(([name, z]) => {
       if (!E.map.getPane(name)) {
-        const p = E.map.createPane(name); p.style.zIndex = z; p.style.pointerEvents = 'auto';
+        const p = E.map.createPane(name); p.style.zIndex = z; p.style.pointerEvents = name === 'changeAreaPane' ? 'none' : 'auto';
       }
     });
   }
@@ -310,35 +326,31 @@
     group.addTo(E.map); E.projectedLayer = group;
   }
 
-  function sampleEven(arr, max) {
-    if (arr.length <= max) return arr;
-    const out = [];
-    for (let i = 0; i < max; i++) out.push(arr[Math.floor((i + 0.5) * arr.length / max)]);
-    return out;
-  }
-  function drawChangePoints() {
+  function drawChangeArea() {
     clearLayer('changeLayer');
     if (!E.map || !E.grids || E.grids.deltas.year === 2025) return;
     ensurePanes();
-    const stable = [], gain = [], loss = [];
-    E.grids.changeCells.forEach(c => {
-      const d = c[3] - c[2];
-      if (d > 0) gain.push(c);
-      else if (d < 0) loss.push(c);
-      else stable.push(c);
-    });
-    const group = L.layerGroup();
-    const add = (cells, fill, name, max) => sampleEven(cells, max).forEach(p => {
-      L.circleMarker([p[0], p[1]], {
-        pane: 'changePointPane', radius: name === 'Stable' ? 3 : 4,
-        color: '#ffffff', weight: 1,
-        fillColor: fill, fillOpacity: name === 'Stable' ? 0.58 : 0.88
-      }).bindTooltip(name + ': ' + p[2] + ' → ' + p[3] + ' suitable species').addTo(group);
-    });
-    add(stable, '#4d749c', 'Stable', 180);
-    add(gain, '#37915c', 'Gain', 260);
-    add(loss, '#c14c3b', 'Loss', 260);
-    group.addTo(E.map); E.changeLayer = group;
+    const { gridWidth, gridHeight, changePixels, bounds } = E.grids;
+    const canvas = document.createElement('canvas');
+    canvas.width = gridWidth; canvas.height = gridHeight;
+    const ctx = canvas.getContext('2d');
+    const img = ctx.createImageData(gridWidth, gridHeight);
+    const colors = {
+      1: [77, 116, 156, 135],   // stable
+      2: [55, 145, 92, 175],    // gain
+      3: [193, 76, 59, 185],    // loss
+      4: [132, 89, 162, 175]    // turnover
+    };
+    for (let i = 0; i < changePixels.length; i++) {
+      const col = colors[changePixels[i]]; if (!col) continue;
+      const j = i * 4;
+      img.data[j] = col[0]; img.data[j + 1] = col[1]; img.data[j + 2] = col[2]; img.data[j + 3] = col[3];
+    }
+    ctx.putImageData(img, 0, 0);
+    const [w, s, e, n] = bounds;
+    E.changeLayer = L.imageOverlay(canvas.toDataURL('image/png'), [[s, w], [n, e]], {
+      pane: 'changeAreaPane', opacity: 1, interactive: false
+    }).addTo(E.map);
   }
 
   function centroid(cells) {
@@ -352,6 +364,7 @@
     if (!E.map || !E.grids || E.grids.deltas.year === 2025) return;
     ensurePanes();
     const group = L.layerGroup();
+    const th = document.getElementById('langThBtn')?.classList.contains('active');
     Object.values(E.grids.speciesData).forEach(sd => {
       const a = centroid(sd.cur), b = centroid(sd.fut); if (!a || !b) return;
       const color = sd.model.sp.color || '#333';
@@ -363,7 +376,7 @@
       const p1 = [b.lat - len * Math.sin(ang - spread), b.lon - len * Math.cos(ang - spread) / cc];
       const p2 = [b.lat - len * Math.sin(ang + spread), b.lon - len * Math.cos(ang + spread) / cc];
       L.polyline([p1, [b.lat, b.lon], p2], { pane: 'shiftArrowPane', color, weight: 2.5, opacity: 0.95 }).addTo(group);
-      line.bindTooltip(sd.model.sp.common + ': suitable-area centroid shift');
+      line.bindTooltip((th ? sd.model.sp.thai : sd.model.sp.common) + ' — ' + (th ? 'การเลื่อนศูนย์กลางพื้นที่เหมาะสม' : 'suitable-area centroid shift'));
     });
     group.addTo(E.map); E.arrowLayer = group;
   }
@@ -383,20 +396,19 @@
       bar = document.createElement('div');
       bar.id = 'habitatCompareBar';
       bar.className = 'habitat-compare-bar';
-      bar.innerHTML = '<button data-mode="current">Current</button><button data-mode="scenario">Scenario</button><button data-mode="change">Change</button><strong id="habitatModeLabel"></strong><div id="habitatCompareLegend"><span><i class="stable"></i>Stable</span><span><i class="gain"></i>Gain</span><span><i class="loss"></i>Loss</span><span><i class="projected"></i>Projected</span></div>';
+      bar.innerHTML = '<button data-mode="current">Current</button><button data-mode="scenario">Scenario</button><button data-mode="change">Change</button><strong id="habitatModeLabel"></strong><div id="habitatCompareLegend"><span><i class="stable"></i>Stable</span><span><i class="gain"></i>Gain</span><span><i class="loss"></i>Loss</span><span><i class="turnover"></i>Turnover</span><span><i class="projected"></i>Projected</span></div>';
       mapEl.parentElement.insertBefore(bar, mapEl);
       bar.addEventListener('click', e => {
         const btn = e.target.closest('button[data-mode]'); if (!btn) return;
-        if (activeMainTab() !== 'distribution') {
-          const tab = document.getElementById('mapTabDist'); if (tab) tab.click();
-          setTimeout(() => { E.mode = btn.dataset.mode; renderView(); }, 60);
-        } else {
-          E.mode = btn.dataset.mode; renderView();
-        }
+        E.mode = btn.dataset.mode;
+        // Do not force the Prediction Map back to Hornbill Distribution.
+        // If Distribution is visible, render immediately; otherwise keep the user's tab.
+        if (activeMainTab() === 'distribution') renderView();
+        else updateBar();
       });
       if (!document.getElementById('habitatCompareCss')) {
         const st = document.createElement('style'); st.id = 'habitatCompareCss';
-        st.textContent = '.habitat-compare-bar{display:flex;align-items:center;gap:6px;padding:6px 8px;margin:0 0 6px;background:#f7f3e8;border:1px solid #e7e0cf;border-radius:6px}.habitat-compare-bar button{border:0;border-radius:4px;padding:6px 12px;font:600 11px sans-serif;background:#eee9dc;color:#5c6256;cursor:pointer}.habitat-compare-bar button.active{background:#287f83;color:#fff}#habitatModeLabel{font:700 10px sans-serif;color:#287f83;margin-left:3px}#habitatCompareLegend{display:none;align-items:center;gap:8px;margin-left:auto;font:600 10px sans-serif;color:#444}#habitatCompareLegend span{display:flex;align-items:center;gap:3px}#habitatCompareLegend i{display:inline-block;width:9px;height:9px;border-radius:50%}.stable{background:#4d749c}.gain{background:#37915c}.loss{background:#c14c3b}.projected{background:#37915c;border:3px solid #f2c230;box-sizing:content-box}';
+        st.textContent = '.habitat-compare-bar{display:flex;align-items:center;gap:6px;padding:6px 8px;margin:0 0 6px;background:#f7f3e8;border:1px solid #e7e0cf;border-radius:6px}.habitat-compare-bar button{border:0;border-radius:4px;padding:6px 12px;font:600 11px sans-serif;background:#eee9dc;color:#5c6256;cursor:pointer}.habitat-compare-bar button.active{background:#287f83;color:#fff}#habitatModeLabel{font:700 10px sans-serif;color:#287f83;margin-left:3px}#habitatCompareLegend{display:none;align-items:center;gap:8px;margin-left:auto;font:600 10px sans-serif;color:#444;flex-wrap:wrap}#habitatCompareLegend span{display:flex;align-items:center;gap:3px}#habitatCompareLegend i{display:inline-block;width:9px;height:9px;border-radius:2px}.stable{background:#4d749c}.gain{background:#37915c}.loss{background:#c14c3b}.turnover{background:#8459a2}.projected{background:#37915c;border:3px solid #f2c230;border-radius:50%!important;box-sizing:content-box}';
         document.head.appendChild(st);
       }
     }
@@ -412,9 +424,14 @@
   }
   function updateNote() {
     const n = document.getElementById('mapRealNote'); if (!n || activeMainTab() !== 'distribution') return;
-    if (E.mode === 'current') n.textContent = 'Current: real GBIF occurrence points.';
-    else if (E.mode === 'scenario') n.innerHTML = 'Scenario: <b style="color:#b58a00">yellow-ring points</b> are projected suitable locations after the last Run; they are not bird counts.';
-    else n.innerHTML = 'Change: <b style="color:#4d749c">blue = stable</b> · <b style="color:#37915c">green = gain</b> · <b style="color:#c14c3b">red = loss</b>. Yellow-ring points are projected suitable locations; dashed arrows show centroid shift.';
+    const th = document.getElementById('langThBtn')?.classList.contains('active');
+    if (E.mode === 'current') n.textContent = th ? 'ปัจจุบัน: จุดข้อมูลการพบนกจริงจาก GBIF' : 'Current: real GBIF occurrence points.';
+    else if (E.mode === 'scenario') n.innerHTML = th
+      ? 'สถานการณ์จำลอง: <b style="color:#b58a00">จุดวงเหลือง</b> คือพื้นที่เหมาะสมที่แบบจำลองคาดการณ์หลัง Run ไม่ใช่จำนวนประชากรนก'
+      : 'Scenario: <b style="color:#b58a00">yellow-ring points</b> are projected suitable locations after the last Run; they are not bird counts.';
+    else n.innerHTML = th
+      ? 'การเปลี่ยนแปลงเป็น <b>พื้นที่สี</b>: <b style="color:#4d749c">น้ำเงิน = ชนิดเดิมยังเหมาะสม</b> · <b style="color:#37915c">เขียว = พื้นที่เหมาะสมเพิ่ม</b> · <b style="color:#c14c3b">แดง = พื้นที่เหมาะสมลด</b> · <b style="color:#8459a2">ม่วง = จำนวนชนิดเท่าเดิมแต่ชนิดเปลี่ยน</b>. จุดวงเหลืองคือพื้นที่เหมาะสมที่คาดการณ์ และเส้นประคือการเลื่อนศูนย์กลางพื้นที่เหมาะสม'
+      : 'Change is shown as <b>colored areas</b>: <b style="color:#4d749c">blue = stable species set</b> · <b style="color:#37915c">green = gain</b> · <b style="color:#c14c3b">red = loss</b> · <b style="color:#8459a2">purple = turnover</b>. Yellow-ring points are projected suitable locations; dashed arrows show centroid shift.';
   }
 
   function renderView() {
@@ -432,7 +449,7 @@
       drawProjected();
     } else if (E.mode === 'change') {
       setOccurrences(false);
-      drawChangePoints();
+      drawChangeArea();
       drawProjected();
       drawArrows();
     }
