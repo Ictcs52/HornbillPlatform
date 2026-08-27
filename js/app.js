@@ -1124,10 +1124,11 @@
              const diffStr = (diff > 0 ? '+' : '') + diff.toFixed(2);
              return `<div class="results-summary" style="margin-top:4px">${esc(t.climate.projectedHSI)} ${v.settings.targetYear}: <b style="color:#23281f">${v.projectedMeanHSI.toFixed(2)}</b> <span style="color:${diffColor}">(${diffStr} ${esc(t.climate.vsCurrent)})</span></div>`;
            })() : ''}
-      ${v.modelRun ? `
+           ${v.modelRun ? `
         <div class="climate-note" style="margin-top:10px">
           Habitat suitability is modelled from environmental predictors. Population growth, mortality, and bird movement are not estimated by this model.
         </div>` : ''}
+           `}
     </div>`;
 
     html += `<div class="card">
