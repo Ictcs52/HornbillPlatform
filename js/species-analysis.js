@@ -29,6 +29,7 @@
     distributionMode: 'change',
     distributionControl: null,
     shiftLayer: null,
+    projectedLayer: null,
     ran: false,
     running: false,
     refreshTimer: null,
@@ -234,6 +235,7 @@
     const deltas=scenarioDeltas();
     const richnessCur=new Uint8Array(N), richnessFut=new Uint8Array(N);
     const risk={temp:new Float32Array(N),rainfall:new Float32Array(N),dust:new Float32Array(N)};
+    const speciesData=Object.fromEntries(models.map(m=>[m.sp.id,{model:m,curCount:0,futCount:0,curCells:[],futCells:[]}])) ;
     for(let row=0;row<ref.height;row++){
       for(let col=0;col<ref.width;col++){
         const i=row*ref.width+col,[lat,lon]=cellCenter(ref,row,col);
@@ -241,8 +243,15 @@
         let nRiskT=0,nRiskR=0,nRiskD=0;
         for(const m of models){
           const full=predictAt(m,lat,lon,deltas,null); if(!full)continue;
-          if(full.current>=m.threshold)richnessCur[i]++;
-          if(full.future>=m.threshold)richnessFut[i]++;
+          const sd=speciesData[m.sp.id];
+          if(full.current>=m.threshold){
+            richnessCur[i]++; sd.curCount++;
+            if(row%2===0&&col%2===0)sd.curCells.push([lat,lon,full.current]);
+          }
+          if(full.future>=m.threshold){
+            richnessFut[i]++; sd.futCount++;
+            if(row%2===0&&col%2===0)sd.futCells.push([lat,lon,full.future]);
+          }
           const pt=predictAt(m,lat,lon,deltas,'temp'); if(pt){risk.temp[i]+=pt.change;nRiskT++;}
           const pr=predictAt(m,lat,lon,deltas,'rainfall'); if(pr){risk.rainfall[i]+=pr.change;nRiskR++;}
           const pd=predictAt(m,lat,lon,deltas,'dust'); if(pd){risk.dust[i]+=pd.change;nRiskD++;}
@@ -252,7 +261,7 @@
         if(nRiskD)risk.dust[i]/=nRiskD;
       }
     }
-    E.grids={ref,richnessCur,richnessFut,risk,deltas,maxSpecies:Math.max(1,models.length)};
+    E.grids={ref,richnessCur,richnessFut,risk,deltas,maxSpecies:Math.max(1,models.length),speciesData};
   }
 
   function rgbaRich(v,max) {
@@ -316,6 +325,47 @@
     if(document.getElementById('riskTabTemperature')?.classList.contains('active'))return'temp';
     if(document.getElementById('riskTabDust')?.classList.contains('active'))return'dust';
     return'rainfall';
+  }
+
+  function clearProjectedLayer(){
+    if(E.mainMap&&E.projectedLayer&&E.mainMap.hasLayer(E.projectedLayer))E.mainMap.removeLayer(E.projectedLayer);
+    E.projectedLayer=null;
+  }
+  function setOccurrenceVisible(visible){
+    if(window.HORNBILL_MAP_API&&typeof window.HORNBILL_MAP_API.setOccurrenceVisible==='function'){
+      window.HORNBILL_MAP_API.setOccurrenceVisible(visible);
+    }
+  }
+  function representativeCells(cells,target){
+    if(!cells||!cells.length||target<=0)return[];
+    const n=Math.min(target,cells.length),out=[];
+    for(let k=0;k<n;k++){
+      const idx=Math.min(cells.length-1,Math.floor((k+.5)*cells.length/n));
+      out.push(cells[idx]);
+    }
+    return out;
+  }
+  function drawProjectedPoints(){
+    clearProjectedLayer();
+    if(!E.mainMap||!E.grids||activeMainTab()!=='distribution'||E.distributionMode==='current'){
+      setOccurrenceVisible(true);return;
+    }
+    setOccurrenceVisible(false);
+    const th=document.getElementById('langThBtn')?.classList.contains('active');
+    const grp=L.layerGroup();
+    Object.values(E.grids.speciesData||{}).forEach(sd=>{
+      const m=sd.model,baseObs=cleanPoints(m.sp).length;
+      const baseRep=Math.max(10,Math.min(120,Math.round(Math.sqrt(Math.max(1,baseObs))*5)));
+      const ratio=sd.curCount>0?sd.futCount/sd.curCount:0;
+      const target=Math.max(0,Math.min(180,Math.round(baseRep*ratio)));
+      representativeCells(sd.futCells,target).forEach(p=>{
+        L.circleMarker([p[0],p[1]],{
+          radius:4,color:'#fff',weight:1,fillColor:m.sp.color||'#333',fillOpacity:.88
+        }).bindTooltip((th?m.sp.thai:m.sp.common)+' — '+(th?'ตำแหน่งพื้นที่เหมาะสมที่คาดการณ์':'projected suitable location')+' (HSI '+p[2].toFixed(2)+')')
+          .addTo(grp);
+      });
+    });
+    grp.addTo(E.mainMap);E.projectedLayer=grp;
   }
 
   function clearShiftLayer(){
@@ -384,9 +434,9 @@
     const note=document.getElementById('mapRealNote');
     if(note&&E.ran){
       if(mainKind==='distribution'){
-        if(E.distributionMode==='current')note.textContent='Current habitat suitability: modelled suitable area under baseline environmental conditions.';
-        else if(E.distributionMode==='future')note.textContent='Scenario habitat suitability: modelled suitable area after applying the selected Temperature, Rainfall and PM2.5 scenario.';
-        else note.innerHTML='Habitat change: <b style="color:#4d749c">Blue = stable</b> · <b style="color:#37915c">Green = gain</b> · <b style="color:#c14c3b">Red = loss</b>. Dashed arrows show the shift of each species suitable-area centroid, not observed bird movement.';
+        if(E.distributionMode==='current')note.textContent='Current: real GBIF occurrence points over modelled baseline suitable habitat.';
+        else if(E.distributionMode==='future')note.textContent='Scenario: representative projected suitable-location points. Point count changes with modelled suitable-area change; these are not predicted bird counts.';
+        else note.innerHTML='Habitat change: <b style="color:#4d749c">Blue = stable</b> · <b style="color:#37915c">Green = gain</b> · <b style="color:#c14c3b">Red = loss</b>. Colored dots are representative projected suitable locations and vary with suitable area; dashed arrows show centroid shift. They are not bird population counts or observed movement.';
       }
       else note.textContent=`Model overlay: ${mainKind==='temp'?'Temperature':mainKind==='rainfall'?'Rainfall':'PM2.5'} scenario effect on habitat suitability. Green = suitability increase; red = decrease.`;
     }
@@ -401,6 +451,8 @@
     updateDistributionControl();
     addOverlay(E.mainMap,'mainOverlay',mainKind,mainKind==='distribution'?0.58:0.48);
     if(mainKind==='distribution'&&E.distributionMode==='change')drawShiftArrows();else clearShiftLayer();
+    if(mainKind==='distribution'&&(E.distributionMode==='future'||E.distributionMode==='change'))drawProjectedPoints();
+    else { clearProjectedLayer(); setOccurrenceVisible(true); }
     const forestKind=activeForestTab();
     addOverlay(E.forestMap,'forestOverlay',forestKind,0.46);
     updateNotes(mainKind,forestKind);
