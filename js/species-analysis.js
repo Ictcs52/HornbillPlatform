@@ -422,6 +422,9 @@
       });
     });
     grp.addTo(E.mainMap);E.projectedLayer=grp;
+    // Change is a comparison view: keep observed/current GBIF points visible
+    // underneath the yellow-ring projected points so displacement is obvious.
+    if(E.distributionMode==='change')setOccurrenceVisible(true);
   }
 
   function clearShiftLayer(){
@@ -473,7 +476,7 @@
       bar=document.createElement('div');
       bar.id='habitatCompareBar';
       bar.className='habitat-compare-bar';
-      bar.innerHTML='<button data-mode="current">Current</button><button data-mode="future">Scenario</button><button data-mode="change">Change</button><strong id="habitatModeLabel"></strong><div id="habitatChangeLegend"><span><i style="background:#4d749c"></i>Stable</span><span><i style="background:#37915c"></i>Gain</span><span><i style="background:#c14c3b"></i>Loss</span></div>';
+      bar.innerHTML='<button data-mode="current">Current</button><button data-mode="future">Scenario</button><button data-mode="change">Change</button><strong id="habitatModeLabel"></strong><div id="habitatChangeLegend"><span><i style="background:#4d749c"></i>Stable</span><span><i style="background:#37915c"></i>Gain</span><span><i style="background:#c14c3b"></i>Loss</span><span><i style="background:#fff;border:2px solid #777;border-radius:50%"></i>Current bird</span><span><i style="background:#37915c;border:3px solid #f2c230;border-radius:50%"></i>Projected</span></div>';
       mapEl.parentElement.insertBefore(bar,mapEl);
       L.DomEvent.disableClickPropagation(bar);
       L.DomEvent.disableScrollPropagation(bar);
@@ -522,7 +525,7 @@
             ? 'Scenario projection is unavailable for species whose inputs fall outside their fitted data range; unsupported extrapolations are not plotted.'
             : 'Scenario: representative projected suitable-location points. Point count changes with modelled suitable-area change; these are not predicted bird counts.';
         }
-        else note.innerHTML='Habitat change: <b style="color:#4d749c">Blue = stable</b> · <b style="color:#37915c">Green = gain</b> · <b style="color:#c14c3b">Red = loss</b>. Projected suitable-location points use the species color with a yellow outline; dashed arrows show suitable-area centroid shift.';
+        else note.innerHTML='Change compares both maps together: original GBIF bird locations remain visible, while <b style="color:#b58a00">yellow-ring points</b> are projected suitable locations for the selected scenario. <b style="color:#4d749c">Blue = stable</b> · <b style="color:#37915c">Green = gain</b> · <b style="color:#c14c3b">Red = loss</b>; dashed arrows show suitable-area centroid shift.';
       }
       else note.textContent=`Model overlay: ${mainKind==='temp'?'Temperature':mainKind==='rainfall'?'Rainfall':'PM2.5'} scenario effect on habitat suitability. Green = suitability increase; red = decrease.`;
     }
