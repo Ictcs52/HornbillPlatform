@@ -408,8 +408,8 @@
   }
   function drawShiftArrows(){
     clearShiftLayer();
-    if(!E.mainMap||!E.ran||activeMainTab()!=='distribution'||E.distributionMode!=='change'||scenarioDeltas().year===2025)return;
-    const selected=selectedSpecies(),models=E.models.filter(m=>selected.some(s=>s.id===m.sp.id)),del=scenarioDeltas();
+    if(!E.mainMap||!E.ran||!E.grids||activeMainTab()!=='distribution'||E.distributionMode!=='change'||E.grids.deltas.year===2025)return;
+    const selected=selectedSpecies(),models=E.models.filter(m=>selected.some(s=>s.id===m.sp.id)),del=E.grids.deltas;
     const grp=L.layerGroup();
     models.forEach(m=>{
       const a=suitableCentroid(m,false,del),b=suitableCentroid(m,true,del);
@@ -436,7 +436,8 @@
     if(!map||!E.grids)return;
     removeOverlay(map,key);
     const r=E.grids.ref,[w,s,e,n]=r.bbox;
-    E[key]=L.imageOverlay(canvasUrl(kind),[[s,w],[n,e]],{opacity:opacity||0.62,interactive:false,pane:'overlayPane'}).addTo(map);
+    const op=(kind==='distribution'&&E.distributionMode==='change')?0.86:(opacity||0.62);
+    E[key]=L.imageOverlay(canvasUrl(kind),[[s,w],[n,e]],{opacity:op,interactive:false,pane:'overlayPane'}).addTo(map);
   }
 
   function ensureDistributionControl() {
@@ -461,7 +462,7 @@
     });
     E.distributionControl=new Control().addTo(E.mainMap);
     const s=document.createElement('style');
-    s.textContent='.habitat-compare-control{background:#fff;padding:4px;border-radius:6px;box-shadow:0 1px 5px rgba(0,0,0,.25);display:flex;gap:3px}.habitat-compare-control button{border:0;border-radius:4px;padding:5px 7px;font:600 10px sans-serif;background:#f1eee4;color:#5c6256;cursor:pointer}.habitat-compare-control button.active{background:#287f83;color:#fff}';
+    s.textContent='.habitat-compare-control{background:#fff;padding:4px;border-radius:6px;box-shadow:0 1px 5px rgba(0,0,0,.25);display:flex;gap:3px;align-items:center}.habitat-compare-control button{border:0;border-radius:4px;padding:5px 7px;font:600 10px sans-serif;background:#f1eee4;color:#5c6256;cursor:pointer}.habitat-compare-control button.active{background:#287f83;color:#fff}#habitatChangeLegend{display:none;gap:6px;margin-left:4px;font:600 9px sans-serif;color:#444}#habitatChangeLegend span{display:flex;align-items:center;gap:2px}#habitatChangeLegend i{width:8px;height:8px;border-radius:2px;display:inline-block}';
     document.head.appendChild(s);
   }
   function updateDistributionControl(){
@@ -470,6 +471,15 @@
     const el=E.distributionControl.getContainer(),show=activeMainTab()==='distribution';
     el.style.display=show?'flex':'none';
     el.querySelectorAll('button[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===E.distributionMode));
+    let legend=document.getElementById('habitatChangeLegend');
+    if(E.distributionMode==='change'&&show){
+      if(!legend){
+        legend=document.createElement('div'); legend.id='habitatChangeLegend';
+        legend.innerHTML='<span><i style="background:#4d749c"></i>Stable</span><span><i style="background:#37915c"></i>Gain</span><span><i style="background:#c14c3b"></i>Loss</span>';
+        el.appendChild(legend);
+      }
+      legend.style.display='flex';
+    } else if(legend) legend.style.display='none';
   }
 
   function updateNotes(mainKind,forestKind) {
