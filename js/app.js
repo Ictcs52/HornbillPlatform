@@ -132,7 +132,22 @@
     return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
-  function updateSetting(key, val) { state.settings[key] = val; render(); }
+  function updateSetting(key, val) {
+    if (key === 'targetYear') {
+      const y = Number(val);
+      state.settings.targetYear = y;
+      // A target year is a scenario label, not a source of future-climate data.
+      // Start every year selection from the observed/current environmental baseline
+      // so stale values entered for a previous run/year cannot silently reappear.
+      state.settings.deltasByYear[y] = { tempDelta: 0, rainfallDelta: 0, dustDelta: 0 };
+      state.modelRun = false;
+      state.modelResults = null;
+      render();
+      return;
+    }
+    state.settings[key] = val;
+    render();
+  }
 
   // The climate-scenario numeric boxes show the absolute value the user is
   // projecting to (defaulting to the current real/observed value), not the
