@@ -474,7 +474,10 @@
 
   function refreshMaps() {
     if(!E.ran||!E.grids)return;
-    buildGrids();
+    // Rendering Current / Scenario / Change must use the scenario snapshot
+    // calculated by the last Run. Rebuilding here made every compare-button
+    // click silently recalculate from live controls and could make the three
+    // modes appear identical.
     const mainKind=activeMainTab();
     updateDistributionControl();
     addOverlay(E.mainMap,'mainOverlay',mainKind,mainKind==='distribution'?0.58:0.48);
@@ -517,7 +520,8 @@
   }
 
   window.HORNBILL_SPECIES_MAPS = {
-    refresh: (delay) => scheduleRefresh(delay == null ? 0 : delay)
+    refresh: (delay) => scheduleRefresh(delay == null ? 0 : delay),
+    run: () => runEngine()
   };
 
   // Keep calculations tied to the student's original controls.
