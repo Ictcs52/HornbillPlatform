@@ -154,6 +154,13 @@
   // delta itself — this converts what was typed back into a delta against
   // the current optimal value for storage.
   const CURVE_ID_BY_DELTA_FIELD = { tempDelta: 'temp', rainfallDelta: 'rainfall', dustDelta: 'dust' };
+  window.HORNBILL_SCENARIO_API = {
+    currentYear: () => state.settings.targetYear,
+    deltas: () => {
+      const d = state.settings.deltasByYear[state.settings.targetYear] || { tempDelta: 0, rainfallDelta: 0, dustDelta: 0 };
+      return { temp: d.tempDelta || 0, rainfall: d.rainfallDelta || 0, dust: d.dustDelta || 0 };
+    }
+  };
   function setClimateAbsolute(field, value) {
     const curveId = CURVE_ID_BY_DELTA_FIELD[field];
     const curve = computeVals().responseCurves.find(c => c.id === curveId);
