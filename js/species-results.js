@@ -54,5 +54,12 @@
   };
   document.addEventListener('click',e=>{const a=e.target.closest('[data-action]')?.getAttribute('data-action');if(a==='runModel')setTimeout(run,80);if(a==='toggleSpecies'||a==='setLang')schedule(80);});
   document.addEventListener('change',e=>{if(e.target.matches('select[data-field="targetYear"],input[data-onchange="climateAbsolute"]'))schedule(100);});
-  const obs=new MutationObserver(()=>{if(S.ran)schedule(40);});document.addEventListener('DOMContentLoaded',()=>{const app=document.getElementById('app');if(app)obs.observe(app,{subtree:true,childList:true});});
+  const obs=new MutationObserver(()=>{if(S.ran)schedule(40);});
+  document.addEventListener('DOMContentLoaded',()=>{
+    const app=document.getElementById('app');
+    if(app)obs.observe(app,{subtree:true,childList:true});
+    // Fit the species-level model once at startup so the 2025 baseline Results
+    // appear automatically; users should not need to click the right panel.
+    setTimeout(()=>run(),250);
+  });
 })();
