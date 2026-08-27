@@ -352,16 +352,19 @@
     return'rainfall';
   }
 
-  function ensureModelPanes(){
-    if(!E.mainMap)return;
-    if(!E.mainMap.getPane('habitatModelPane')){
-      const p=E.mainMap.createPane('habitatModelPane'); p.style.zIndex=620; p.style.pointerEvents='none';
+  function ensureModelPanes(map){
+    if(!map)return;
+    if(!map.getPane('habitatModelPane')){
+      const p=map.createPane('habitatModelPane'); p.style.zIndex=620; p.style.pointerEvents='none';
     }
-    if(!E.mainMap.getPane('projectedPane')){
-      const p=E.mainMap.createPane('projectedPane'); p.style.zIndex=680; p.style.pointerEvents='auto';
-    }
-    if(!E.mainMap.getPane('shiftPane')){
-      const p=E.mainMap.createPane('shiftPane'); p.style.zIndex=700; p.style.pointerEvents='auto';
+    // Projected points and shift arrows only exist on the main Prediction Map.
+    if(map===E.mainMap){
+      if(!map.getPane('projectedPane')){
+        const p=map.createPane('projectedPane'); p.style.zIndex=680; p.style.pointerEvents='auto';
+      }
+      if(!map.getPane('shiftPane')){
+        const p=map.createPane('shiftPane'); p.style.zIndex=700; p.style.pointerEvents='auto';
+      }
     }
   }
 
@@ -456,7 +459,7 @@
     removeOverlay(map,key);
     const r=E.grids.ref,[w,s,e,n]=r.bbox;
     const op=(kind==='distribution'&&E.distributionMode==='change')?0.86:(opacity||0.62);
-    ensureModelPanes();
+    ensureModelPanes(map);
     E[key]=L.imageOverlay(canvasUrl(kind),[[s,w],[n,e]],{opacity:op,interactive:false,pane:'habitatModelPane'}).addTo(map);
     if(E[key].bringToFront)E[key].bringToFront();
   }
@@ -478,12 +481,18 @@
         const b=ev.target.closest('button[data-mode]');
         if(!b)return;
         E.distributionMode=b.dataset.mode;
-        updateDistributionControl();
-        scheduleRefresh(20);
+        if(activeMainTab()!=='distribution'){
+          const dist=document.getElementById('mapTabDist');
+          if(dist)dist.click();
+          setTimeout(()=>{updateDistributionControl();scheduleRefresh(30);},40);
+        }else{
+          updateDistributionControl();
+          scheduleRefresh(20);
+        }
       });
       if(!document.getElementById('habitatCompareStyle')){
         const s=document.createElement('style'); s.id='habitatCompareStyle';
-        s.textContent='.habitat-compare-bar{display:flex;align-items:center;gap:6px;padding:6px 8px;margin:0 0 6px 0;background:#f7f3e8;border:1px solid #e7e0cf;border-radius:6px}.habitat-compare-bar button{border:0;border-radius:4px;padding:6px 12px;font:600 11px sans-serif;background:#eee9dc;color:#5c6256;cursor:pointer}.habitat-compare-bar button.active{background:#287f83;color:#fff}#habitatModeLabel{font:700 10px sans-serif;color:#287f83;margin-left:4px}#habitatChangeLegend{display:none;gap:8px;margin-left:auto;font:600 10px sans-serif;color:#444}#habitatChangeLegend span{display:flex;align-items:center;gap:3px}#habitatChangeLegend i{width:9px;height:9px;border-radius:2px;display:inline-block}';
+        s.textContent='.habitat-compare-bar{display:flex;align-items:center;gap:6px;padding:6px 8px;margin:0 0 6px 0;background:#f7f3e8;border:1px solid #e7e0cf;border-radius:6px}.habitat-compare-bar button{border:0;border-radius:4px;padding:6px 12px;font:600 11px sans-serif;background:#eee9dc;color:#5c6256;cursor:pointer}.habitat-compare-bar button.active{background:#287f83;color:#fff}.habitat-compare-bar.inactive-map-mode{opacity:.82}.habitat-compare-bar.inactive-map-mode:after{content:'ใช้กับ Hornbill Distribution';margin-left:auto;font:600 10px sans-serif;color:#8a8f80}#habitatModeLabel{font:700 10px sans-serif;color:#287f83;margin-left:4px}#habitatChangeLegend{display:none;gap:8px;margin-left:auto;font:600 10px sans-serif;color:#444}#habitatChangeLegend span{display:flex;align-items:center;gap:3px}#habitatChangeLegend i{width:9px;height:9px;border-radius:2px;display:inline-block}';
         document.head.appendChild(s);
       }
     }
@@ -492,8 +501,9 @@
   function updateDistributionControl(){
     ensureDistributionControl();
     if(!E.distributionControl)return;
-    const el=E.distributionControl.getContainer(),show=activeMainTab()==='distribution';
-    el.style.display=show?'flex':'none';
+    const el=E.distributionControl.getContainer(),show=true;
+    el.style.display='flex';
+    el.classList.toggle('inactive-map-mode',activeMainTab()!=='distribution');
     el.querySelectorAll('button[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===E.distributionMode));
     const modeLabel=el.querySelector('#habitatModeLabel');
     if(modeLabel)modeLabel.textContent=E.distributionMode==='current'?'CURRENT':E.distributionMode==='future'?'SCENARIO':'CHANGE';
@@ -522,7 +532,8 @@
 
   function refreshMaps() {
     if(!E.ran||!E.grids)return;
-    ensureModelPanes();
+    ensureModelPanes(E.mainMap);
+    ensureModelPanes(E.forestMap);
     // Rendering Current / Scenario / Change must use the scenario snapshot
     // calculated by the last Run. Rebuilding here made every compare-button
     // click silently recalculate from live controls and could make the three
