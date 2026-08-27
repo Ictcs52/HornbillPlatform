@@ -1245,11 +1245,16 @@
       attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 18
     }).addTo(map);
+    const occurrencePane = map.createPane('occurrencePane');
+    occurrencePane.style.zIndex = 650;
+    occurrencePane.style.pointerEvents = 'auto';
     pointsLayer = L.layerGroup().addTo(map);
     window.HORNBILL_MAP_API = {
       map: () => map,
       setOccurrenceVisible: (visible) => {
         if (!map || !pointsLayer) return;
+        const pane = map.getPane('occurrencePane');
+        if (pane) pane.style.display = visible ? '' : 'none';
         const has = map.hasLayer(pointsLayer);
         if (visible && !has) pointsLayer.addTo(map);
         if (!visible && has) map.removeLayer(pointsLayer);
@@ -1345,7 +1350,7 @@
       v.visiblePoints.forEach(pt => {
         const { fillColor, popup } = pointStyle(pt);
         L.circleMarker(pt.latlng, {
-          radius: 3, color: '#ffffff', weight: 1, fillColor, fillOpacity: 0.9
+          pane: 'occurrencePane', radius: 3, color: '#ffffff', weight: 1, fillColor, fillOpacity: 0.9
         }).bindPopup(popup).addTo(pointsLayer);
       });
       return;
@@ -1361,7 +1366,7 @@
     v.visiblePoints.forEach(pt => {
       const { fillColor, popup } = pointStyle(pt);
       L.circleMarker(pt.latlng, {
-        radius: 4, color: '#ffffff', weight: 1, fillColor, fillOpacity: 0.9
+        pane: 'occurrencePane', radius: 4, color: '#ffffff', weight: 1, fillColor, fillOpacity: 0.9
       }).bindPopup(popup).addTo(pointsLayer);
     });
 
