@@ -503,7 +503,13 @@
       E.models=[];
       for(let i=0;i<SPECIES.length;i++){const m=fitSpecies(SPECIES[i],i);if(m)E.models.push(m);}
       E.ran=E.models.length>0;
-      if(E.ran){buildGrids();scheduleRefresh(350);}
+      if(E.ran){
+        buildGrids();
+        scheduleRefresh(120);
+        // The original Run UI continues rendering progress after this engine
+        // finishes; re-apply the completed result after that animation settles.
+        scheduleRefresh(2800);
+      }
     } catch(err) {
       console.error('Species habitat engine failed:',err);
     } finally { E.running=false; }
@@ -517,7 +523,10 @@
   document.addEventListener('click', e => {
     const el=e.target.closest('[data-action]'); if(!el)return;
     const action=el.getAttribute('data-action');
-    if(action==='runModel') setTimeout(runEngine,60);
+    // app.js re-renders immediately when Run is clicked. Wait until that render
+    // has committed the current draft scenario to application state/DOM, then
+    // rebuild the habitat grids from exactly those values.
+    if(action==='runModel') setTimeout(runEngine,520);
     if(action==='setMapTab'||action==='setForestRiskTab'||action==='toggleSpecies') scheduleRefresh(180);
   });
   document.addEventListener('change', e => {
