@@ -484,9 +484,15 @@
     addOverlay(E.forestMap,'forestOverlay',forestKind,0.46);
     updateNotes(mainKind,forestKind);
   }
-  function scheduleRefresh(delay) {
+  function scheduleRefresh(delay,allowRebuild) {
     clearTimeout(E.refreshTimer);
-    E.refreshTimer=setTimeout(()=>{try{refreshMaps();}catch(err){console.error('Species map overlay:',err);}},delay||120);
+    E.refreshTimer=setTimeout(()=>{
+      try{
+        // refreshMaps renders E.grids only. Grid rebuilding is performed solely
+        // by runEngine(), so draft scenario edits cannot change calculations.
+        refreshMaps();
+      }catch(err){console.error('Species map overlay:',err);}
+    },delay||120);
   }
 
   async function runEngine() {
@@ -516,12 +522,16 @@
   });
   document.addEventListener('change', e => {
     const el=e.target;
-    if(el.matches('select[data-field="targetYear"], input[data-onchange="climateAbsolute"]')) scheduleRefresh(220);
+    // Future Climate Scenario fields are drafts. Changing them must not
+    // recalculate maps/results. Only 2025 is automatic; future years wait Run.
+    if(el.matches('select[data-field="targetYear"]') && Number(el.value)===2025){
+      setTimeout(()=>runEngine(),80);
+    }
   });
 
-  // App renders frequently; a lightweight observer re-applies model overlays
-  // after the original app refreshes its raster/point layers.
-  const obs=new MutationObserver(()=>{if(E.ran)scheduleRefresh(90);});
+  // Re-render the last computed overlays after DOM redraws, without using
+  // newly edited future scenario values.
+  const obs=new MutationObserver(()=>{if(E.ran)scheduleRefresh(90,false);});
   document.addEventListener('DOMContentLoaded',()=>{
     ensureDistributionControl();
     const app=document.getElementById('app'); if(app)obs.observe(app,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style']});
