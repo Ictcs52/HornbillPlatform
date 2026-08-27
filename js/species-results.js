@@ -53,8 +53,11 @@
   function scenarioValid(m){
     const year=window.HORNBILL_SCENARIO_API&&window.HORNBILL_SCENARIO_API.currentYear?window.HORNBILL_SCENARIO_API.currentYear():2025;
     if(year===2025)return true;
-    const vals=scenarioAbsolute();
-    return vals.every((v,j)=>v!==null&&m.ranges&&v>=m.ranges[j].min&&v<=m.ranges[j].max);
+    // Scenario controls are national climate-layer shifts. A single absolute
+    // value must not be compared with every raster cell's local training
+    // values (rainfall/PM2.5 are spatially heterogeneous). Validate the
+    // resulting raster values cell-by-cell during prediction instead.
+    return true;
   }
   function areaFor(m){
     const ref=S.rasters.temp,[w,s,e,n]=ref.bbox,del=scenario(),valid=scenarioValid(m);let cur=0,fut=0;
