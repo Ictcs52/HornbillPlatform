@@ -288,11 +288,17 @@
     const t=v/Math.max(1,max);
     return [Math.round(245-150*t),Math.round(238-70*t),Math.round(210-135*t),180];
   }
-  function rgbaChange(cur,fut) {
+  function rgbaChange(cur,fut,maxSpecies) {
     if(!cur&&!fut)return[0,0,0,0];
-    if(cur&&fut)return[77,116,156,235];   // Stable habitat
-    if(cur&&!fut)return[193,76,59,245];   // Loss
-    return[55,145,92,245];                // Gain
+    // Compare species richness, not only presence/absence of "any species".
+    // The old boolean comparison made Current and Change look almost identical
+    // whenever at least one species remained suitable in both scenarios.
+    const d=fut-cur;
+    if(d===0)return[77,116,156,220];       // Stable richness
+    const strength=Math.min(1,Math.abs(d)/Math.max(1,maxSpecies));
+    const a=Math.round(205+40*strength);
+    if(d>0)return[55,145,92,a];            // Gain
+    return[193,76,59,a];                   // Loss
   }
   function suitableCentroid(m, future, deltas){
     const ref=E.rasters.temp,[w,s,e,n]=ref.bbox;
@@ -326,7 +332,7 @@
       if(kind==='distribution'){
         if(E.distributionMode==='current') q=rgbaRich(g.richnessCur[i],g.maxSpecies);
         else if(E.distributionMode==='future') q=rgbaRich(g.richnessFut[i],g.maxSpecies);
-        else q=rgbaChange(g.richnessCur[i]>0,g.richnessFut[i]>0);
+        else q=rgbaChange(g.richnessCur[i],g.richnessFut[i],g.maxSpecies);
       }
       else q=rgbaRisk(g.risk[kind][i]);
       const p=i*4;img.data[p]=q[0];img.data[p+1]=q[1];img.data[p+2]=q[2];img.data[p+3]=q[3];
@@ -511,7 +517,7 @@
             ? 'Scenario projection is unavailable for species whose inputs fall outside their fitted data range; unsupported extrapolations are not plotted.'
             : 'Scenario: representative projected suitable-location points. Point count changes with modelled suitable-area change; these are not predicted bird counts.';
         }
-        else note.innerHTML='Habitat change: <b style="color:#4d749c">Blue = stable</b> · <b style="color:#37915c">Green = gain</b> · <b style="color:#c14c3b">Red = loss</b>. Colored dots are representative projected suitable locations and vary with suitable area; dashed arrows show centroid shift. They are not bird population counts or observed movement.';
+        else note.innerHTML='Habitat change: <b style="color:#4d749c">Blue = stable species richness</b> · <b style="color:#37915c">Green = more selected species suitable</b> · <b style="color:#c14c3b">Red = fewer selected species suitable</b>. Dashed arrows show suitable-area centroid shift; this is not observed bird movement.';
       }
       else note.textContent=`Model overlay: ${mainKind==='temp'?'Temperature':mainKind==='rainfall'?'Rainfall':'PM2.5'} scenario effect on habitat suitability. Green = suitability increase; red = decrease.`;
     }
