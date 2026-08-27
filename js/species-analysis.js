@@ -225,10 +225,11 @@
     return [get('tempDelta'),get('rainfallDelta'),get('dustDelta')];
   }
   function scenarioValidForModel(m){
-    const del=scenarioDeltas();
-    if(del.year===2025)return true;
-    const vals=scenarioAbsolute();
-    return vals.every((v,j)=>v!==null&&m.ranges&&v>=m.ranges[j].min&&v<=m.ranges[j].max);
+    // Future controls describe shifts of the environmental rasters, not a
+    // single local observation shared by every cell. Keep the model active;
+    // extrapolation warnings remain a UI warning rather than suppressing all
+    // species results and projected habitat.
+    return true;
   }
   function cellCenter(r,row,col){const[w,s,e,n]=r.bbox;return[n-(row+.5)/r.height*(n-s),w+(col+.5)/r.width*(e-w)];}
   function predictAt(m,lat,lon,deltas,onlyVar) {
