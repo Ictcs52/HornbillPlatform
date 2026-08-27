@@ -183,7 +183,7 @@
     const raw=px.concat(bg), st=standardizeStats(raw);
     const X=px.map(r=>zrow(st,r)).concat(bg.map(r=>zrow(st,r))), y=new Array(px.length).fill(1).concat(new Array(bg.length).fill(0));
     const model=fitLogistic(X,y), scores=X.map(r=>predict(model,r));
-    const ranges=px[0].map((_,j)=>({min:Math.min(...px.map(r=>r[j])),max:Math.max(...px.map(r=>r[j]))}));
+    const ranges=raw[0].map((_,j)=>({min:Math.min(...raw.map(r=>r[j])),max:Math.max(...raw.map(r=>r[j]))}));
     return { sp, st, model, threshold:threshold(scores,y), trainAuc:auc(scores,y), ranges };
   }
 
