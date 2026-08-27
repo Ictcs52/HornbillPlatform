@@ -357,10 +357,21 @@
   }
   function representativeCells(cells,target){
     if(!cells||!cells.length||target<=0)return[];
-    const n=Math.min(target,cells.length),out=[];
-    for(let k=0;k<n;k++){
-      const idx=Math.min(cells.length-1,Math.floor((k+.5)*cells.length/n));
-      out.push(cells[idx]);
+    const n=Math.min(target,cells.length);
+    // Prefer the most suitable future cells, but keep spatial separation so
+    // Scenario visibly represents a new habitat pattern instead of reproducing
+    // the original occurrence cloud.
+    const ranked=cells.slice().sort((a,b)=>b[2]-a[2]),out=[];
+    const minDist=0.22;
+    for(const p of ranked){
+      if(out.every(q=>Math.hypot(p[0]-q[0],p[1]-q[1])>=minDist))out.push(p);
+      if(out.length>=n)break;
+    }
+    if(out.length<n){
+      for(const p of ranked){
+        if(!out.includes(p))out.push(p);
+        if(out.length>=n)break;
+      }
     }
     return out;
   }
@@ -429,7 +440,15 @@
   }
 
   function ensureDistributionControl() {
-    if(E.distributionControl || !E.mainMap)return;
+    if(!E.mainMap)return;
+    // app.js can rebuild the map container. A cached Leaflet control may then
+    // point to a detached DOM node, which is why Current/Scenario/Change
+    // appeared to disappear.
+    if(E.distributionControl){
+      const oldEl=E.distributionControl.getContainer&&E.distributionControl.getContainer();
+      if(oldEl&&oldEl.isConnected)return;
+      E.distributionControl=null;
+    }
     const Control=L.Control.extend({
       options:{position:'topright'},
       onAdd:function(){
@@ -448,7 +467,7 @@
   function updateDistributionControl(){
     ensureDistributionControl();
     if(!E.distributionControl)return;
-    const el=E.distributionControl.getContainer(),show=activeMainTab()==='distribution'&&E.ran;
+    const el=E.distributionControl.getContainer(),show=activeMainTab()==='distribution';
     el.style.display=show?'flex':'none';
     el.querySelectorAll('button[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===E.distributionMode));
   }
@@ -482,8 +501,13 @@
     updateDistributionControl();
     addOverlay(E.mainMap,'mainOverlay',mainKind,mainKind==='distribution'?0.58:0.48);
     if(mainKind==='distribution'&&E.distributionMode==='change')drawShiftArrows();else clearShiftLayer();
-    if(mainKind==='distribution'&&E.grids.deltas.year!==2025&&(E.distributionMode==='future'||E.distributionMode==='change'))drawProjectedPoints();
-    else { clearProjectedLayer(); setOccurrenceVisible(true); }
+    if(mainKind==='distribution'&&E.grids.deltas.year!==2025&&E.distributionMode==='future'){
+      drawProjectedPoints();
+    } else if(mainKind==='distribution'&&E.grids.deltas.year!==2025&&E.distributionMode==='change'){
+      clearProjectedLayer(); setOccurrenceVisible(false);
+    } else {
+      clearProjectedLayer(); setOccurrenceVisible(true);
+    }
     const forestKind=activeForestTab();
     addOverlay(E.forestMap,'forestOverlay',forestKind,0.46);
     updateNotes(mainKind,forestKind);
