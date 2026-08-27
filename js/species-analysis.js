@@ -480,6 +480,10 @@
     } finally { E.running=false; }
   }
 
+  window.HORNBILL_SPECIES_MAPS = {
+    refresh: (delay) => scheduleRefresh(delay == null ? 0 : delay)
+  };
+
   // Keep calculations tied to the student's original controls.
   document.addEventListener('click', e => {
     const el=e.target.closest('[data-action]'); if(!el)return;
