@@ -162,7 +162,17 @@
   }
   function setLang(l) { state.lang = l; render(); }
   function setForestRiskTab(tab) { state.forestRiskTab = tab; render(); }
-  function toggleSpecies(id) { state.speciesSel[id] = !state.speciesSel[id]; render(); }
+  window.HORNBILL_SELECTION_API = {
+    selectedIds: () => Object.keys(state.speciesSel).filter(id => !!state.speciesSel[id])
+  };
+  function toggleSpecies(id) {
+    state.speciesSel[id] = !state.speciesSel[id];
+    render();
+    // Recompute overlays after the freshly rendered Samples selection is in DOM.
+    if (window.HORNBILL_SPECIES_MAPS && typeof window.HORNBILL_SPECIES_MAPS.refresh === 'function') {
+      window.HORNBILL_SPECIES_MAPS.refresh(0);
+    }
+  }
   function validateData() { state.dataValidated = true; render(); }
   function useSampleData() {
     state.dataSource = 'sample';
