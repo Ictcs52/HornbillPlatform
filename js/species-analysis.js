@@ -28,6 +28,7 @@
     grids: null,
     distributionMode: 'change',
     distributionControl: null,
+    shiftLayer: null,
     ran: false,
     running: false,
     refreshTimer: null,
@@ -265,6 +266,24 @@
     if(cur&&!fut)return[193,76,59,205];   // Loss
     return[55,145,92,205];                // Gain
   }
+  function suitableCentroid(m, future, deltas){
+    const ref=E.rasters.temp,[w,s,e,n]=ref.bbox;
+    let sw=0,slat=0,slon=0;
+    const step=2;
+    for(let row=0;row<ref.height;row+=step){
+      const lat=n-(row+.5)/ref.height*(n-s);
+      for(let col=0;col<ref.width;col+=step){
+        const lon=w+(col+.5)/ref.width*(e-w);
+        if(!pointInGeoJSON(lat,lon,THAILAND_BOUNDARY))continue;
+        const p=predictAt(m,lat,lon,deltas,null); if(!p)continue;
+        const score=future?p.future:p.current;
+        if(score<m.threshold)continue;
+        const wt=Math.max(0.001,score-m.threshold+0.001);
+        sw+=wt;slat+=lat*wt;slon+=lon*wt;
+      }
+    }
+    return sw?{lat:slat/sw,lon:slon/sw}:null;
+  }
   function rgbaRisk(change) {
     if(Math.abs(change)<0.005)return[0,0,0,0];
     // Green = suitability improves, red = suitability declines.
@@ -297,6 +316,31 @@
     if(document.getElementById('riskTabTemperature')?.classList.contains('active'))return'temp';
     if(document.getElementById('riskTabDust')?.classList.contains('active'))return'dust';
     return'rainfall';
+  }
+
+  function clearShiftLayer(){
+    if(E.mainMap&&E.shiftLayer&&E.mainMap.hasLayer(E.shiftLayer))E.mainMap.removeLayer(E.shiftLayer);
+    E.shiftLayer=null;
+  }
+  function drawShiftArrows(){
+    clearShiftLayer();
+    if(!E.mainMap||!E.ran||activeMainTab()!=='distribution'||E.distributionMode!=='change')return;
+    const selected=selectedSpecies(),models=E.models.filter(m=>selected.some(s=>s.id===m.sp.id)),del=scenarioDeltas();
+    const grp=L.layerGroup();
+    models.forEach(m=>{
+      const a=suitableCentroid(m,false,del),b=suitableCentroid(m,true,del);
+      if(!a||!b)return;
+      const color=m.sp.color||'#333';
+      const line=L.polyline([[a.lat,a.lon],[b.lat,b.lon]],{color,weight:2.2,opacity:.9,dashArray:'6,4'}).addTo(grp);
+      const ang=Math.atan2(b.lat-a.lat,(b.lon-a.lon)*Math.cos(b.lat*Math.PI/180));
+      const len=.22,spread=.55,cc=Math.max(.2,Math.cos(b.lat*Math.PI/180));
+      const p1=[b.lat-len*Math.sin(ang-spread),b.lon-len*Math.cos(ang-spread)/cc];
+      const p2=[b.lat-len*Math.sin(ang+spread),b.lon-len*Math.cos(ang+spread)/cc];
+      L.polyline([p1,[b.lat,b.lon],p2],{color,weight:2.2,opacity:.9}).addTo(grp);
+      const th=document.getElementById('langThBtn')?.classList.contains('active');
+      line.bindTooltip((th?m.sp.thai:m.sp.common)+': '+(th?'ทิศทางการเลื่อนของศูนย์กลางพื้นที่เหมาะสม':'projected suitable-area centroid shift'));
+    });
+    grp.addTo(E.mainMap);E.shiftLayer=grp;
   }
 
   function removeOverlay(map,key) {
@@ -342,7 +386,7 @@
       if(mainKind==='distribution'){
         if(E.distributionMode==='current')note.textContent='Current habitat suitability: modelled suitable area under baseline environmental conditions.';
         else if(E.distributionMode==='future')note.textContent='Scenario habitat suitability: modelled suitable area after applying the selected Temperature, Rainfall and PM2.5 scenario.';
-        else note.innerHTML='Habitat change: <b style="color:#4d749c">Blue = stable</b> · <b style="color:#37915c">Green = gain</b> · <b style="color:#c14c3b">Red = loss</b>. This indicates change in suitable habitat, not observed bird movement.';
+        else note.innerHTML='Habitat change: <b style="color:#4d749c">Blue = stable</b> · <b style="color:#37915c">Green = gain</b> · <b style="color:#c14c3b">Red = loss</b>. Dashed arrows show the shift of each species suitable-area centroid, not observed bird movement.';
       }
       else note.textContent=`Model overlay: ${mainKind==='temp'?'Temperature':mainKind==='rainfall'?'Rainfall':'PM2.5'} scenario effect on habitat suitability. Green = suitability increase; red = decrease.`;
     }
@@ -356,6 +400,7 @@
     const mainKind=activeMainTab();
     updateDistributionControl();
     addOverlay(E.mainMap,'mainOverlay',mainKind,mainKind==='distribution'?0.58:0.48);
+    if(mainKind==='distribution'&&E.distributionMode==='change')drawShiftArrows();else clearShiftLayer();
     const forestKind=activeForestTab();
     addOverlay(E.forestMap,'forestOverlay',forestKind,0.46);
     updateNotes(mainKind,forestKind);
