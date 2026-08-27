@@ -413,7 +413,7 @@
       const target=Math.max(0,Math.min(180,Math.round(baseRep*ratio)));
       representativeCells(sd.futCells,target).forEach(p=>{
         L.circleMarker([p[0],p[1]],{
-          pane:'projectedPane',radius:4,color:'#fff',weight:1,fillColor:m.sp.color||'#333',fillOpacity:.88
+          pane:'projectedPane',radius:5,color:'#f2c230',weight:3,fillColor:m.sp.color||'#333',fillOpacity:.92
         }).bindTooltip((th?m.sp.thai:m.sp.common)+' — '+(th?'ตำแหน่งพื้นที่เหมาะสมที่คาดการณ์':'projected suitable location')+' (HSI '+p[2].toFixed(2)+')')
           .addTo(grp);
       });
@@ -463,28 +463,31 @@
 
   function ensureDistributionControl() {
     if(!E.mainMap)return;
-    // app.js can rebuild the map container. A cached Leaflet control may then
-    // point to a detached DOM node, which is why Current/Scenario/Change
-    // appeared to disappear.
-    if(E.distributionControl){
-      const oldEl=E.distributionControl.getContainer&&E.distributionControl.getContainer();
-      if(oldEl&&oldEl.isConnected)return;
-      E.distributionControl=null;
-    }
-    const Control=L.Control.extend({
-      options:{position:'topright'},
-      onAdd:function(){
-        const d=L.DomUtil.create('div','habitat-compare-control');
-        L.DomEvent.disableClickPropagation(d);L.DomEvent.disableScrollPropagation(d);
-        d.innerHTML='<button data-mode="current">Current</button><button data-mode="future">Scenario</button><button data-mode="change">Change</button>';
-        d.addEventListener('click',ev=>{const b=ev.target.closest('button[data-mode]');if(!b)return;E.distributionMode=b.dataset.mode;updateDistributionControl();scheduleRefresh(20);});
-        return d;
+    let bar=document.getElementById('habitatCompareBar');
+    if(!bar){
+      const mapEl=document.getElementById('leafletMap');
+      if(!mapEl||!mapEl.parentElement)return;
+      bar=document.createElement('div');
+      bar.id='habitatCompareBar';
+      bar.className='habitat-compare-bar';
+      bar.innerHTML='<button data-mode="current">Current</button><button data-mode="future">Scenario</button><button data-mode="change">Change</button><strong id="habitatModeLabel"></strong><div id="habitatChangeLegend"><span><i style="background:#4d749c"></i>Stable</span><span><i style="background:#37915c"></i>Gain</span><span><i style="background:#c14c3b"></i>Loss</span></div>';
+      mapEl.parentElement.insertBefore(bar,mapEl);
+      L.DomEvent.disableClickPropagation(bar);
+      L.DomEvent.disableScrollPropagation(bar);
+      bar.addEventListener('click',ev=>{
+        const b=ev.target.closest('button[data-mode]');
+        if(!b)return;
+        E.distributionMode=b.dataset.mode;
+        updateDistributionControl();
+        scheduleRefresh(20);
+      });
+      if(!document.getElementById('habitatCompareStyle')){
+        const s=document.createElement('style'); s.id='habitatCompareStyle';
+        s.textContent='.habitat-compare-bar{display:flex;align-items:center;gap:6px;padding:6px 8px;margin:0 0 6px 0;background:#f7f3e8;border:1px solid #e7e0cf;border-radius:6px}.habitat-compare-bar button{border:0;border-radius:4px;padding:6px 12px;font:600 11px sans-serif;background:#eee9dc;color:#5c6256;cursor:pointer}.habitat-compare-bar button.active{background:#287f83;color:#fff}#habitatModeLabel{font:700 10px sans-serif;color:#287f83;margin-left:4px}#habitatChangeLegend{display:none;gap:8px;margin-left:auto;font:600 10px sans-serif;color:#444}#habitatChangeLegend span{display:flex;align-items:center;gap:3px}#habitatChangeLegend i{width:9px;height:9px;border-radius:2px;display:inline-block}';
+        document.head.appendChild(s);
       }
-    });
-    E.distributionControl=new Control().addTo(E.mainMap);
-    const s=document.createElement('style');
-    s.textContent='.habitat-compare-control{background:#fff;padding:4px;border-radius:6px;box-shadow:0 1px 5px rgba(0,0,0,.25);display:flex;gap:3px;align-items:center}.habitat-compare-control button{border:0;border-radius:4px;padding:5px 7px;font:600 10px sans-serif;background:#f1eee4;color:#5c6256;cursor:pointer}.habitat-compare-control button.active{background:#287f83;color:#fff}#habitatModeLabel{font:700 9px sans-serif;color:#287f83;margin-left:3px}#habitatChangeLegend{display:none;gap:6px;margin-left:4px;font:600 9px sans-serif;color:#444}#habitatChangeLegend span{display:flex;align-items:center;gap:2px}#habitatChangeLegend i{width:8px;height:8px;border-radius:2px;display:inline-block}';
-    document.head.appendChild(s);
+    }
+    E.distributionControl={getContainer:()=>bar};
   }
   function updateDistributionControl(){
     ensureDistributionControl();
@@ -492,18 +495,10 @@
     const el=E.distributionControl.getContainer(),show=activeMainTab()==='distribution';
     el.style.display=show?'flex':'none';
     el.querySelectorAll('button[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===E.distributionMode));
-    let modeLabel=document.getElementById('habitatModeLabel');
-    if(!modeLabel){modeLabel=document.createElement('strong');modeLabel.id='habitatModeLabel';el.appendChild(modeLabel);}
-    modeLabel.textContent=E.distributionMode==='current'?'CURRENT':E.distributionMode==='future'?'SCENARIO':'CHANGE';
-    let legend=document.getElementById('habitatChangeLegend');
-    if(E.distributionMode==='change'&&show){
-      if(!legend){
-        legend=document.createElement('div'); legend.id='habitatChangeLegend';
-        legend.innerHTML='<span><i style="background:#4d749c"></i>Stable</span><span><i style="background:#37915c"></i>Gain</span><span><i style="background:#c14c3b"></i>Loss</span>';
-        el.appendChild(legend);
-      }
-      legend.style.display='flex';
-    } else if(legend) legend.style.display='none';
+    const modeLabel=el.querySelector('#habitatModeLabel');
+    if(modeLabel)modeLabel.textContent=E.distributionMode==='current'?'CURRENT':E.distributionMode==='future'?'SCENARIO':'CHANGE';
+    const legend=el.querySelector('#habitatChangeLegend');
+    if(legend)legend.style.display=(E.distributionMode==='change'&&show)?'flex':'none';
   }
 
   function updateNotes(mainKind,forestKind) {
@@ -517,7 +512,7 @@
             ? 'Scenario projection is unavailable for species whose inputs fall outside their fitted data range; unsupported extrapolations are not plotted.'
             : 'Scenario: representative projected suitable-location points. Point count changes with modelled suitable-area change; these are not predicted bird counts.';
         }
-        else note.innerHTML='Habitat change: <b style="color:#4d749c">Blue = stable species richness</b> · <b style="color:#37915c">Green = more selected species suitable</b> · <b style="color:#c14c3b">Red = fewer selected species suitable</b>. Dashed arrows show suitable-area centroid shift; this is not observed bird movement.';
+        else note.innerHTML='Habitat change: <b style="color:#4d749c">Blue = stable</b> · <b style="color:#37915c">Green = gain</b> · <b style="color:#c14c3b">Red = loss</b>. Projected suitable-location points use the species color with a yellow outline; dashed arrows show suitable-area centroid shift.';
       }
       else note.textContent=`Model overlay: ${mainKind==='temp'?'Temperature':mainKind==='rainfall'?'Rainfall':'PM2.5'} scenario effect on habitat suitability. Green = suitability increase; red = decrease.`;
     }
@@ -536,10 +531,8 @@
     updateDistributionControl();
     addOverlay(E.mainMap,'mainOverlay',mainKind,mainKind==='distribution'?0.58:0.48);
     if(mainKind==='distribution'&&E.distributionMode==='change')drawShiftArrows();else clearShiftLayer();
-    if(mainKind==='distribution'&&E.grids.deltas.year!==2025&&E.distributionMode==='future'){
+    if(mainKind==='distribution'&&E.grids.deltas.year!==2025&&(E.distributionMode==='future'||E.distributionMode==='change')){
       drawProjectedPoints();
-    } else if(mainKind==='distribution'&&E.grids.deltas.year!==2025&&E.distributionMode==='change'){
-      clearProjectedLayer(); setOccurrenceVisible(false);
     } else {
       clearProjectedLayer(); setOccurrenceVisible(true);
     }
