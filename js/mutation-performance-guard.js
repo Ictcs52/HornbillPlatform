@@ -30,4 +30,31 @@
 
   GuardedMutationObserver.prototype = NativeMutationObserver.prototype;
   window.MutationObserver = GuardedMutationObserver;
+
+  // Centroid-shift dashed arrows were removed from the student-facing comparison.
+  // Block any layer created for the old shiftArrowPane before it reaches a map/group.
+  if (window.L && L.Layer && L.Layer.prototype && !window.__hornbillNoShiftArrowInstalled) {
+    window.__hornbillNoShiftArrowInstalled = true;
+    const nativeAddTo = L.Layer.prototype.addTo;
+    L.Layer.prototype.addTo = function (target) {
+      if (this && this.options && this.options.pane === 'shiftArrowPane') return this;
+      return nativeAddTo.call(this, target);
+    };
+  }
+
+  function scrubCentroidText() {
+    const note = document.getElementById('mapRealNote');
+    if (!note) return;
+    note.innerHTML = note.innerHTML
+      .replace(/;?\s*dashed arrows show centroid shift\.?/gi, '')
+      .replace(/\s*และเส้นประคือการเลื่อนศูนย์กลางพื้นที่เหมาะสม/gi, '');
+  }
+
+  document.addEventListener('click', function () {
+    setTimeout(scrubCentroidText, 0);
+    setTimeout(scrubCentroidText, 120);
+  });
+  document.addEventListener('DOMContentLoaded', function () {
+    setTimeout(scrubCentroidText, 500);
+  });
 })();
