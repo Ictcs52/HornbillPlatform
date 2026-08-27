@@ -396,7 +396,7 @@
   }
   function drawShiftArrows(){
     clearShiftLayer();
-    if(!E.mainMap||!E.ran||activeMainTab()!=='distribution'||E.distributionMode!=='change')return;
+    if(!E.mainMap||!E.ran||activeMainTab()!=='distribution'||E.distributionMode!=='change'||scenarioDeltas().year===2025)return;
     const selected=selectedSpecies(),models=E.models.filter(m=>selected.some(s=>s.id===m.sp.id)),del=scenarioDeltas();
     const grp=L.layerGroup();
     models.forEach(m=>{
@@ -478,7 +478,7 @@
     updateDistributionControl();
     addOverlay(E.mainMap,'mainOverlay',mainKind,mainKind==='distribution'?0.58:0.48);
     if(mainKind==='distribution'&&E.distributionMode==='change')drawShiftArrows();else clearShiftLayer();
-    if(mainKind==='distribution'&&(E.distributionMode==='future'||E.distributionMode==='change'))drawProjectedPoints();
+    if(mainKind==='distribution'&&E.grids.deltas.year!==2025&&(E.distributionMode==='future'||E.distributionMode==='change'))drawProjectedPoints();
     else { clearProjectedLayer(); setOccurrenceVisible(true); }
     const forestKind=activeForestTab();
     addOverlay(E.forestMap,'forestOverlay',forestKind,0.46);
@@ -531,10 +531,30 @@
   });
   document.addEventListener('change', e => {
     const el=e.target;
-    // Future Climate Scenario fields are drafts. Changing them must not
-    // recalculate maps/results. Only 2025 is automatic; future years wait Run.
-    if(el.matches('select[data-field="targetYear"]') && Number(el.value)===2025){
-      setTimeout(()=>runEngine(),80);
+    if(el.matches('select[data-field="targetYear"]')){
+      const year=Number(el.value);
+      if(year===2025){
+        // Returning to the baseline must always restore the real occurrence map.
+        // Do not leave the Compare control in Change/Scenario with hidden GBIF
+        // points or old shift arrows from a future-year run.
+        E.distributionMode='current';
+        clearProjectedLayer();
+        clearShiftLayer();
+        setOccurrenceVisible(true);
+        updateDistributionControl();
+        setTimeout(()=>runEngine(),120);
+      } else {
+        // Future-year values are drafts until Run. Keep the last computed result
+        // visible, but never hide the real points simply because the year changed.
+        clearProjectedLayer();
+        clearShiftLayer();
+        setOccurrenceVisible(true);
+        if(activeMainTab()==='distribution') {
+          E.distributionMode='current';
+          updateDistributionControl();
+          scheduleRefresh(80,false);
+        }
+      }
     }
   });
 
