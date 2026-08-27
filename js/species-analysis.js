@@ -86,12 +86,16 @@
   }
 
   function selectedSpecies() {
+    // Read the application's real selection state when available. The Samples
+    // panel is re-rendered often, so using DOM opacity alone can briefly return
+    // stale selections and leave model overlays unchanged.
+    if (window.HORNBILL_SELECTION_API && typeof window.HORNBILL_SELECTION_API.selectedIds === 'function') {
+      const ids = new Set(window.HORNBILL_SELECTION_API.selectedIds());
+      return SPECIES.filter(sp => ids.has(sp.id));
+    }
     const rows = Array.from(document.querySelectorAll('.species-row[data-id]'));
     if (!rows.length) return SPECIES;
-    const ids = new Set(rows.filter(el => {
-      const op = parseFloat(el.style.opacity || '1');
-      return op > 0.75;
-    }).map(el => el.getAttribute('data-id')));
+    const ids = new Set(rows.filter(el => parseFloat(el.style.opacity || '1') > 0.75).map(el => el.getAttribute('data-id')));
     return SPECIES.filter(sp => ids.has(sp.id));
   }
 
