@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HornbillCast — คู่มือเข้าใจโครงงานและเตรียมตอบกรรมการ</title>
+<style>
+:root{--bg:#f6f3ea;--card:#fffdf7;--ink:#24312b;--muted:#6b746e;--line:#ded8ca;--teal:#287f83;--teal2:#1f5f62;--gold:#e0ad2d;--green:#3f8f5d;--red:#c35746;--blue:#4d749c;--purple:#8459a2;--orange:#d4833f}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",Tahoma,Arial,sans-serif;line-height:1.68}.wrap{max-width:1180px;margin:auto;padding:24px}.hero{background:linear-gradient(135deg,#183f42,#287f83);color:#fff;border-radius:24px;padding:34px;box-shadow:0 14px 34px rgba(20,61,63,.18)}.hero h1{margin:0 0 8px;font-size:clamp(30px,4vw,48px);line-height:1.12}.hero p{margin:0;color:#e9f5f3;font-size:18px}.badge{display:inline-block;background:#f3c33b;color:#3b310e;border-radius:999px;padding:6px 12px;font-weight:800;font-size:13px;margin-bottom:14px}.nav{position:sticky;top:0;z-index:20;margin:16px 0;background:rgba(246,243,234,.96);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:14px;padding:10px;display:flex;gap:7px;overflow:auto}.nav a{white-space:nowrap;text-decoration:none;color:#315355;background:#fff;border:1px solid #e4dfd4;padding:7px 11px;border-radius:999px;font-size:13px;font-weight:700}.nav a:hover{background:#eaf3f1}.section{scroll-margin-top:80px}h2{margin:34px 0 14px;font-size:27px;color:#1d5659}h3{margin:0 0 8px;font-size:19px}.grid{display:grid;gap:16px}.g2{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g4{grid-template-columns:repeat(4,minmax(0,1fr))}@media(max-width:850px){.g2,.g3,.g4{grid-template-columns:1fr}.wrap{padding:14px}.hero{padding:26px 20px}}.card{background:var(--card);border:1px solid var(--line);border-radius:17px;padding:20px;box-shadow:0 5px 15px rgba(40,45,41,.045)}.card strong{color:#173f42}.flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:16px;padding:15px}.step{background:#edf5f3;border:1px solid #d7e6e2;border-radius:11px;padding:9px 12px;font-weight:800}.arrow{color:var(--teal);font-size:21px;font-weight:900}.warn,.good,.info{padding:15px 17px;border-radius:13px;margin:12px 0}.warn{background:#fff2e8;border:1px solid #efc8a5;border-left:6px solid var(--orange)}.good{background:#edf8f0;border:1px solid #cbe3d2;border-left:6px solid var(--green)}.info{background:#eef4fa;border:1px solid #cedbeb;border-left:6px solid var(--blue)}table{width:100%;border-collapse:collapse;background:#fff;border-radius:13px;overflow:hidden}th,td{padding:10px 11px;border-bottom:1px solid #ece7dc;text-align:left;vertical-align:top}th{background:#eaf3f1;color:#245d60}.center{text-align:center}.metric{font-size:31px;font-weight:900;color:var(--teal);line-height:1.1}.small{font-size:13px;color:var(--muted)}code{background:#eef0eb;padding:2px 5px;border-radius:5px}.formula{font-family:Consolas,monospace;background:#1e2b29;color:#f4fff9;border-radius:12px;padding:14px;text-align:center;overflow:auto}.qa details{background:#fff;border:1px solid var(--line);border-radius:12px;margin:8px 0;padding:12px 14px}.qa summary{font-weight:800;cursor:pointer;color:#264f51}.chips{display:flex;gap:7px;flex-wrap:wrap}.chip{font-size:12px;font-weight:800;border-radius:999px;padding:5px 9px;background:#eaf3f1;color:#285d60}.no{color:#9d382d}.yes{color:#2f7547}.legend{display:flex;gap:10px;flex-wrap:wrap}.leg{display:flex;align-items:center;gap:6px;font-weight:700}.dot{width:13px;height:13px;border-radius:3px;display:inline-block}.footer{margin:34px 0 10px;color:var(--muted);font-size:13px;text-align:center}.printbtn{border:0;background:#f3c33b;color:#3d3210;font-weight:900;border-radius:999px;padding:10px 14px;cursor:pointer;margin-top:16px}@media print{.nav,.printbtn{display:none}.wrap{max-width:none}.card{break-inside:avoid}.hero{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<section class="hero">
+<div class="badge">HornbillCast • Presentation & Jury Guide</div>
+<h1>คู่มือเข้าใจโครงงานทั้งหมด</h1>
+<p>สรุปข้อมูลวิทยาศาสตร์ การคำนวณ โมเดล แผนที่ คำศัพท์ จุดแข็ง ข้อจำกัด และคำตอบสำหรับกรรมการ ให้เด็กอธิบายได้ถูกต้อง</p>
+<button class="printbtn" onclick="window.print()">พิมพ์ / Save as PDF</button>
+</section>
+<nav class="nav">
+<a href="#overview">ภาพรวม</a><a href="#data">ข้อมูล</a><a href="#tech">เทคนิค</a><a href="#pipeline">ขั้นตอนคำนวณ</a><a href="#model">โมเดล</a><a href="#cv">CV/AUC</a><a href="#outputs">ผลลัพธ์</a><a href="#scenario">Scenario</a><a href="#limits">ข้อจำกัด</a><a href="#qa">กรรมการถาม</a>
+</nav>
+
+<section id="overview" class="section">
+<h2>1. โครงงานนี้ทำอะไร?</h2>
+<div class="card">
+<p><strong>HornbillCast</strong> เป็น Web Application สำหรับประเมิน <strong>ความเหมาะสมของถิ่นอาศัย (Habitat Suitability)</strong> ของนกเงือกจากข้อมูลตำแหน่งการพบจริงและตัวแปรสิ่งแวดล้อม แล้วจำลองว่าพื้นที่ที่เหมาะสมอาจเปลี่ยนอย่างไรเมื่อกำหนดสถานการณ์ของอุณหภูมิ ปริมาณน้ำฝน และ PM2.5</p>
+<div class="good"><strong>ประโยคหลักที่ควรจำ:</strong> “ระบบประเมินการเปลี่ยนแปลงของพื้นที่ที่เหมาะสมต่อการอยู่อาศัย ไม่ได้พยากรณ์จำนวนประชากรนก และไม่ได้ติดตามเส้นทางการย้ายถิ่นจริง”</div>
+</div>
+<div class="grid g3" style="margin-top:16px">
+<div class="card center"><div class="metric">Current</div><p>ข้อมูลฐานและตำแหน่ง occurrence จริง</p></div>
+<div class="card center"><div class="metric">Scenario</div><p>พื้นที่เหมาะสมที่โมเดลคำนวณภายใต้ค่าที่กำหนด</p></div>
+<div class="card center"><div class="metric">Change</div><p>เปรียบเทียบความเปลี่ยนแปลง Current กับ Scenario</p></div>
+</div>
+</section>
+
+<section id="data" class="section">
+<h2>2. ข้อมูลที่ใช้</h2>
+<div class="grid g2">
+<div class="card"><h3>ข้อมูลนก</h3><p>ใช้ข้อมูล <strong>occurrence records จาก GBIF</strong> ซึ่งเป็นพิกัดที่มีรายงานการพบนกจริง พิกัดจัดเก็บเป็น latitude/longitude และนำไปแสดงบนแผนที่โดยตรง</p><p><strong>Presence</strong> = จุดที่มีบันทึกการพบนก</p><p><strong>Background</strong> = จุดที่สุ่มจากพื้นที่ศึกษาเพื่อใช้เป็นกลุ่มเปรียบเทียบ ไม่ใช่จุดที่ยืนยันว่าไม่มีนก</p></div>
+<div class="card"><h3>ชนิดนกในชุดหลัก</h3><ul><li>Great Hornbill — นกกก</li><li>Wreathed Hornbill — นกเงือกกรามช้าง</li><li>Rufous-necked Hornbill</li><li>Rhinoceros Hornbill — นกเงือกหัวแรด</li><li>Helmeted Hornbill</li></ul><p class="small">ชนิดที่มีข้อมูลหลังทำความสะอาดไม่ถึงเกณฑ์ขั้นต่ำ จะไม่สร้างผลโมเดลที่อ้างว่าเชื่อถือได้</p></div>
+</div>
+<h3 style="margin-top:18px">ชั้นข้อมูลสิ่งแวดล้อมหลัก</h3>
+<table><thead><tr><th>ตัวแปร</th><th>ไฟล์/ช่วงอ้างอิง</th><th>บทบาท</th></tr></thead><tbody>
+<tr><td>Temperature</td><td>Mean annual temperature, 1991–2020</td><td>Predictor + Scenario</td></tr>
+<tr><td>Rainfall</td><td>Annual rainfall, 1991–2020</td><td>Predictor + Scenario</td></tr>
+<tr><td>PM2.5</td><td>Regional PM2.5, 2014–2024</td><td>Predictor + Scenario</td></tr>
+<tr><td>Forest Cover</td><td>Forest cover 2025 (Hansen)</td><td>Predictor ใน species-level habitat model; ปัจจุบันไม่ถูกปรับด้วย Scenario slider</td></tr>
+</tbody></table>
+<div class="warn"><strong>อย่าพูดว่า “ข้อมูลทั้งหมดเป็นปี 2025”</strong> — ปี 2025 เป็นปีฐานของระบบ แต่ชั้นข้อมูลแต่ละตัวมีช่วงเวลาอ้างอิงต่างกันตามตาราง</div>
+</section>
+
+<section id="tech" class="section">
+<h2>3. ข้อมูลทางเทคนิคของ Web App</h2>
+<div class="grid g4">
+<div class="card center"><div class="metric">HTML</div><p>โครงสร้างหน้าเว็บ</p></div>
+<div class="card center"><div class="metric">CSS</div><p>รูปแบบและ Responsive UI</p></div>
+<div class="card center"><div class="metric">JS</div><p>ตรรกะ การคำนวณ และโมเดล</p></div>
+<div class="card center"><div class="metric">Leaflet</div><p>Interactive Mapping</p></div>
+</div>
+<div class="grid g2" style="margin-top:16px">
+<div class="card"><h3>GeoTIFF.js</h3><p>อ่านไฟล์ Raster ใน Browser: width, height, bounding box, resolution, CRS, NoData และค่าของแต่ละ cell</p><p>ระบบดึงค่าตัวแปรที่พิกัดด้วย <strong>Nearest-cell lookup</strong></p></div>
+<div class="card"><h3>Client-side Processing</h3><p>ข้อมูลและ GeoTIFF ประมวลผลใน Browser เป็นหลัก ไม่จำเป็นต้องมี backend สำหรับขั้นตอนโมเดลหลัก จึงสามารถเป็น Static Web App ได้</p></div>
+</div>
+<div class="info"><strong>GeoTIFF เข้าใจง่าย ๆ:</strong> เป็นภาพ Raster ที่แต่ละ cell มีทั้งตำแหน่งบนโลกและค่าของตัวแปร เช่น อุณหภูมิ 27.3 °C หรือปริมาณฝน 1,850 mm</div>
+</section>
+
+<section id="pipeline" class="section">
+<h2>4. ขั้นตอนการคำนวณของโปรแกรม</h2>
+<div class="flow">
+<span class="step">Occurrence</span><span class="arrow">→</span><span class="step">Data Cleaning</span><span class="arrow">→</span><span class="step">Spatial Thinning</span><span class="arrow">→</span><span class="step">Sample Raster</span><span class="arrow">→</span><span class="step">Background</span><span class="arrow">→</span><span class="step">Standardize</span><span class="arrow">→</span><span class="step">Logistic Model</span><span class="arrow">→</span><span class="step">5-fold CV</span><span class="arrow">→</span><span class="step">Threshold</span><span class="arrow">→</span><span class="step">Grid Prediction</span><span class="arrow">→</span><span class="step">Scenario</span><span class="arrow">→</span><span class="step">Change</span>
+</div>
+<div class="grid g2" style="margin-top:16px">
+<div class="card"><h3>Data Cleaning</h3><ul><li>ตัดพิกัดไม่ถูกต้อง</li><li>ตัดพิกัดซ้ำ</li><li>ตัดจุดนอกประเทศไทย</li><li>Spatial thinning ≈ 0.025° เพื่อลดการกระจุกตัวของข้อมูล</li></ul></div>
+<div class="card"><h3>เกณฑ์ข้อมูลขั้นต่ำ</h3><p>species-level model กำหนด <strong>minimum usable presence = 20 จุดต่อชนิด</strong> หลังผ่านการตรวจสอบ หากต่ำกว่านี้ระบบจะแสดงว่า “ข้อมูลไม่เพียงพอ”</p></div>
+</div>
+</section>
+
+<section id="model" class="section">
+<h2>5. แบบจำลองที่ใช้</h2>
+<div class="grid g2">
+<div class="card"><h3>Logistic Regression</h3><p>โมเดลเรียนรู้ความสัมพันธ์ระหว่างตัวแปรสิ่งแวดล้อมกับ Presence/Background แล้วให้คะแนนความเหมาะสมต่อเนื่องประมาณ 0–1</p><div class="formula">score = sigmoid(b + w₁x₁ + w₂x₂ + ...)</div></div>
+<div class="card"><h3>L2 Regularization</h3><p>ช่วยควบคุมน้ำหนักของโมเดลไม่ให้ฟิตกับข้อมูลฝึกมากเกินไป ลดความเสี่ยงของ overfitting</p></div>
+</div>
+<div class="card" style="margin-top:16px"><h3>Standardization / Z-score</h3><p>Temperature, Rainfall, PM2.5 และ Forest Cover มีหน่วยและ scale ต่างกัน จึงปรับให้อยู่ในมาตรฐานเดียวกันก่อนเข้าโมเดล</p><div class="formula">Z = (x − mean) / standard deviation</div></div>
+<div class="warn"><strong>HSI ไม่ใช่ probability แบบตรง ๆ</strong> — HSI 0.90 ไม่ควรแปลว่า “มีโอกาสพบนก 90%” เพราะโมเดลนี้ใช้ Presence–Background ไม่ใช่ calibrated occupancy model</div>
+<div class="info"><strong>ความต่างของ 2 engine ในแอป:</strong> species-level habitat engine ใช้ Temperature + Rainfall + PM2.5 + Forest Cover ส่วนโมเดลสรุป/response ใน app หลักใช้ climate layers ที่โหลดอยู่ (Temperature, Rainfall, PM2.5) เพื่อคำนวณภาพรวม ดังนั้นเวลาพรีเซนต์ผล “รายชนิด” ให้ยึด species-level model เป็นหลัก</div>
+</section>
+
+<section id="cv" class="section">
+<h2>6. 5-fold Cross-Validation, ROC, AUC และ CV AUC</h2>
+<div class="grid g2">
+<div class="card"><h3>5-fold Cross-Validation</h3><p>แบ่งข้อมูลเป็น 5 ส่วน ใช้ 4 ส่วน Train และอีก 1 ส่วน Test สลับกันครบ 5 รอบ เพื่อประเมินว่าโมเดลทำงานกับข้อมูลที่ไม่ได้ใช้ฝึกได้ดีแค่ไหน</p></div>
+<div class="card"><h3>ROC / AUC</h3><p><strong>ROC</strong> ดูความสามารถในการจำแนกเมื่อเปลี่ยน threshold หลายค่า ส่วน <strong>AUC</strong> คือค่าพื้นที่ใต้ ROC Curve ใช้สรุปความสามารถในการแยก Presence กับ Background</p></div>
+</div>
+<table style="margin-top:16px"><thead><tr><th>AUC (โดยคร่าว)</th><th>การตีความสำหรับการสื่อสาร</th></tr></thead><tbody><tr><td>0.50</td><td>ใกล้การสุ่ม</td></tr><tr><td>0.70–0.80</td><td>พอใช้</td></tr><tr><td>0.80–0.90</td><td>ดี</td></tr><tr><td>&gt; 0.90</td><td>ดีมาก</td></tr></tbody></table>
+<div class="card" style="margin-top:16px"><h3>CV AUC</h3><p>คือ AUC เฉลี่ยจากการทดสอบทั้ง 5 folds</p><div class="formula">CV AUC = (AUC₁ + AUC₂ + AUC₃ + AUC₄ + AUC₅) / 5</div></div>
+<div class="grid g2" style="margin-top:16px"><div class="card"><p class="no"><strong>✗ ไม่ควรพูด:</strong> “CV AUC = 0.89 แปลว่าโปรแกรมแม่น 89%”</p></div><div class="card"><p class="yes"><strong>✓ ควรพูด:</strong> “โมเดลมีความสามารถค่อนข้างดีในการจำแนก/จัดอันดับ Presence ให้สูงกว่า Background เมื่อทดสอบด้วย Cross-Validation”</p></div></div>
+</section>
+
+<section id="outputs" class="section">
+<h2>7. ค่าผลลัพธ์แต่ละตัวหมายถึงอะไร</h2>
+<table><thead><tr><th>คำ/ค่า</th><th>ความหมาย</th><th>สิ่งที่ไม่ควรตีความ</th></tr></thead><tbody>
+<tr><td>HSI</td><td>Habitat Suitability Index/Score จากโมเดล</td><td>ไม่ใช่ % โอกาสมีนกแบบตรง ๆ</td></tr>
+<tr><td>Mean HSI</td><td>ค่า HSI เฉลี่ยของจุดที่นำมาสรุป</td><td>ไม่ใช่ Accuracy</td></tr>
+<tr><td>CV AUC</td><td>AUC เฉลี่ยจาก 5-fold CV</td><td>ไม่ใช่ % ความแม่นยำ</td></tr>
+<tr><td>Variable Importance</td><td>ความสำคัญเชิงโมเดลจากการสลับตัวแปร (Permutation Importance)</td><td>ไม่ใช่สัดส่วนสาเหตุทางชีววิทยา</td></tr>
+<tr><td>Suitable Area (km²)</td><td>พื้นที่ grid ที่ score ผ่าน threshold</td><td>ไม่ใช่จำนวนประชากร</td></tr>
+<tr><td>Habitat Change %</td><td>% การเปลี่ยนแปลงของพื้นที่เหมาะสม</td><td>ไม่ใช่ % นกเพิ่ม/ลด</td></tr>
+</tbody></table>
+<h3 style="margin-top:18px">Threshold</h3>
+<div class="card"><p>โปรแกรมทดลอง threshold ประมาณ 0.15–0.85 และเลือกค่าที่ทำให้การจำแนกเหมาะสม โดยใช้แนวคิด <strong>Sensitivity + Specificity − 1 (Youden's J)</strong> จึงไม่จำเป็นต้องใช้ 0.50 กับทุกชนิด</p></div>
+<h3 style="margin-top:18px">Variable Importance</h3>
+<div class="card"><p>ใช้แนวคิด <strong>Permutation Importance</strong>: สลับค่าของตัวแปรหนึ่ง แล้วดูว่า AUC ลดลงเท่าไร หากลดลงมาก แปลว่าโมเดลพึ่งพาตัวแปรนั้นมากกว่า จากนั้นปรับสัดส่วนให้รวมเป็น 100%</p></div>
+</section>
+
+<section id="scenario" class="section">
+<h2>8. Scenario ปี 2030 / 2050 / 2070</h2>
+<div class="card"><p>ปีในระบบเป็นช่องสำหรับเก็บ <strong>สถานการณ์ที่ผู้ใช้กำหนด (user-defined scenario)</strong> แยกปี โดยผู้ใช้กำหนดการเปลี่ยน Temperature, Rainfall และ PM2.5 แล้วกด Run</p><div class="formula">Future predictor = Current raster value + Scenario delta</div></div>
+<div class="warn"><strong>สำคัญ:</strong> อย่าพูดว่า “โปรแกรมรู้ว่าในปี 2070 อุณหภูมิจะเท่านี้” หากค่าดังกล่าวไม่ได้ถูกป้อนมาจากชุด climate projection ภายนอก เช่น SSP/CMIP อย่างเป็นทางการ</div>
+<h3>Current / Scenario / Change</h3>
+<div class="grid g3"><div class="card"><h3>Current</h3><p>ตำแหน่ง occurrence จริงและสภาพฐาน</p></div><div class="card"><h3>Scenario</h3><p>จุด/พื้นที่เหมาะสมที่โมเดลคาดการณ์หลังเปลี่ยน scenario</p></div><div class="card"><h3>Change</h3><p>เปรียบเทียบชุดพื้นที่และชนิดที่เหมาะสมก่อน-หลัง</p></div></div>
+<h3 style="margin-top:18px">ความหมายของ Change</h3>
+<div class="legend"><span class="leg"><i class="dot" style="background:var(--blue)"></i>Stable</span><span class="leg"><i class="dot" style="background:var(--green)"></i>Gain</span><span class="leg"><i class="dot" style="background:var(--red)"></i>Loss</span><span class="leg"><i class="dot" style="background:var(--purple)"></i>Turnover</span></div>
+<table style="margin-top:12px"><tbody><tr><td>Stable</td><td>ชุดชนิดที่เหมาะสมยังเหมือนเดิม</td></tr><tr><td>Gain</td><td>จำนวนชนิดที่พื้นที่นั้นเหมาะสมเพิ่มขึ้น</td></tr><tr><td>Loss</td><td>จำนวนชนิดที่พื้นที่นั้นเหมาะสมลดลง</td></tr><tr><td>Turnover</td><td>จำนวนชนิดเท่าเดิม แต่ชนิดที่เหมาะสมเปลี่ยน</td></tr></tbody></table>
+<div class="info"><strong>Projected points วงเหลือง</strong> เป็นตัวแทนตำแหน่งพื้นที่เหมาะสมที่เลือกมาเพื่อแสดงผล ไม่ใช่จำนวนนก และไม่ใช่พิกัดที่ยืนยันว่าจะมีนกอยู่จริงในอนาคต</div>
+<div class="good"><strong>Rainfall / Temperature / PM2.5 Map</strong> ใช้ดูบริบทของตัวแปรสิ่งแวดล้อม โดยรักษาสี Raster ของแผนที่ไว้ ไม่ใช้พื้นสี Change ไปทับ และเวอร์ชันนำเสนอปัจจุบันไม่แสดงเส้นประ centroid shift แล้ว</div>
+</section>
+
+<section id="limits" class="section">
+<h2>9. จุดแข็งและข้อจำกัด</h2>
+<div class="grid g2"><div class="card"><h3>จุดแข็ง</h3><ul><li>รวม occurrence + raster + model + scenario + map ในระบบเดียว</li><li>ประเมินรายชนิด ไม่รวมทุกชนิดเป็นคำตอบเดียว</li><li>มี Cross-Validation และ CV AUC</li><li>มี threshold รายโมเดล</li><li>แสดง Variable Importance</li><li>ประมวลผล GeoTIFF ใน Browser</li><li>แยก Current / Scenario / Change เพื่ออธิบายง่าย</li></ul></div><div class="card"><h3>ข้อจำกัด</h3><ul><li>Background ไม่ใช่ confirmed absence</li><li>GBIF อาจมี sampling bias</li><li>สภาพถิ่นอาศัยจริงมีตัวแปรมากกว่า 4 ตัว</li><li>Scenario ปัจจุบันเป็น user-defined ไม่ใช่ official forecast อัตโนมัติ</li><li>Forest Cover ยังไม่ถูกเปลี่ยนตามปีใน Scenario</li><li>Scenario ที่ไกลจากช่วงข้อมูลฝึกมี uncertainty สูง</li><li>Correlation จากโมเดลไม่เท่ากับ causation</li></ul></div></div>
+<div class="good"><strong>การพูดข้อจำกัดเป็นข้อดี:</strong> แสดงว่าทีมเข้าใจขอบเขตของโมเดล และไม่ตีความผลเกินข้อมูล</div>
+</section>
+
+<section id="qa" class="section qa">
+<h2>10. คำถามกรรมการที่มีโอกาสถาม</h2>
+<details open><summary>โครงงานนี้ทำนายอะไร?</summary><p>ทำนาย/ประเมิน “ความเหมาะสมของถิ่นอาศัย” และการเปลี่ยนแปลงของพื้นที่เหมาะสมภายใต้ Scenario ไม่ได้ทำนายจำนวนประชากรหรือเส้นทางการบินจริง</p></details>
+<details><summary>ข้อมูลนกมาจากไหน?</summary><p>GBIF occurrence records ซึ่งเป็นพิกัดที่มีรายงานการพบนกจริง</p></details>
+<details><summary>Background คือจุดที่ไม่มีนกใช่ไหม?</summary><p>ไม่ใช่ เป็นจุดสุ่มจากพื้นที่ศึกษาเพื่อใช้เปรียบเทียบกับ Presence เพราะเราไม่ได้มีข้อมูล confirmed absence ครอบคลุมทั้งประเทศ</p></details>
+<details><summary>ใช้โมเดลอะไร?</summary><p>L2-regularized Logistic Regression ใน species-level habitat model โดยใช้ตัวแปร Temperature, Rainfall, PM2.5 และ Forest Cover</p></details>
+<details><summary>ทำไมต้อง Standardize?</summary><p>เพราะแต่ละตัวแปรมีหน่วยและ scale ต่างกัน เช่น °C, mm และ PM2.5 จึงทำ Z-score ก่อนเข้าโมเดล</p></details>
+<details><summary>5-fold Cross-Validation คืออะไร?</summary><p>แบ่งข้อมูลเป็น 5 ส่วน ใช้ 4 ส่วนฝึกและ 1 ส่วนทดสอบ สลับกันครบ 5 รอบ เพื่อดูประสิทธิภาพกับข้อมูลที่ไม่ได้ใช้ฝึกในรอบนั้น</p></details>
+<details><summary>CV AUC = 0.89 แปลว่าแม่น 89% หรือไม่?</summary><p>ไม่ใช่ AUC วัดความสามารถในการจำแนก/จัดอันดับ Presence กับ Background ค่า 0.89 แสดงว่าความสามารถในการจำแนกค่อนข้างดี ไม่ใช่ Accuracy 89%</p></details>
+<details><summary>ทำไมบางชนิดไม่มีผลโมเดล?</summary><p>ข้อมูล occurrence หลังตรวจสอบและ spatial thinning มีไม่ถึงเกณฑ์ขั้นต่ำ 20 จุด จึงไม่สร้างผลที่อาจไม่น่าเชื่อถือ</p></details>
+<details><summary>HSI 0.90 คือมีโอกาสพบนก 90% ไหม?</summary><p>ไม่ควรตีความแบบนั้น HSI เป็นคะแนนความเหมาะสมเชิงโมเดลจาก Presence–Background</p></details>
+<details><summary>Gain +100% แปลว่านกเพิ่ม 100% ไหม?</summary><p>ไม่ใช่ หมายถึงพื้นที่เหมาะสมเพิ่มขึ้นตามโมเดล ไม่ใช่จำนวนประชากรเพิ่มขึ้น</p></details>
+<details><summary>จุดวงเหลืองคือจุดที่นกจะย้ายไปหรือไม่?</summary><p>ไม่ใช่ เป็น projected suitable locations ที่เลือกจากพื้นที่เหมาะสมเพื่อแสดงผลบนแผนที่</p></details>
+<details><summary>ปี 2030/2050/2070 มาจากไหน?</summary><p>เป็น Scenario slots ที่ผู้ใช้กำหนดค่าเอง หากต้องการอ้างว่าเป็น climate projection จริง ต้องนำค่าจากแหล่ง projection ภายนอกมาเป็น input</p></details>
+<details><summary>นี่ถือว่าเป็น AI ไหม?</summary><p>เรียกได้ว่าเป็น Statistical/Machine Learning model สำหรับ Habitat Suitability โดยใช้ Logistic Regression ไม่ใช่ Deep Learning และไม่ใช่ Generative AI</p></details>
+<details><summary>ทำไมเลือก Logistic Regression?</summary><p>โครงสร้างไม่ซับซ้อน อธิบายได้ เหมาะกับการจำแนกสองกลุ่มและงานที่ต้องการ interpretability มากกว่าการใช้ black-box model</p></details>
+<details><summary>Variable Importance บอกเหตุและผลหรือไม่?</summary><p>ไม่บอกเหตุและผลโดยตรง เป็นเพียงความสำคัญต่อประสิทธิภาพของโมเดลเมื่อรบกวนตัวแปรนั้น</p></details>
+</section>
+
+<section class="section">
+<h2>11. Script สรุปสำหรับพูด 45–60 วินาที</h2>
+<div class="card"><p>“โครงงาน HornbillCast เป็นเว็บแอปสำหรับประเมินความเหมาะสมของถิ่นอาศัยของนกเงือก โดยใช้ข้อมูลตำแหน่งการพบนกจาก GBIF ร่วมกับข้อมูลอุณหภูมิ ปริมาณน้ำฝน PM2.5 และพื้นที่ป่าไม้ เราตรวจสอบข้อมูล ตัดจุดซ้ำและทำ spatial thinning จากนั้นสร้าง Background points และทำ Standardization ก่อนสร้าง Logistic Regression รายชนิด โมเดลถูกประเมินด้วย 5-fold Cross-Validation และค่า CV AUC แล้วจึงคำนวณ Habitat Suitability ในแต่ละพื้นที่ เมื่อผู้ใช้กำหนด Scenario ของอุณหภูมิ ฝน และ PM2.5 ระบบจะคำนวณความเหมาะสมใหม่ และเปรียบเทียบ Current, Scenario และ Change เพื่อดูพื้นที่ที่คงเดิม เพิ่มขึ้น ลดลง หรือมีการสับเปลี่ยนชนิด ทั้งหมดนี้เป็นการประเมินพื้นที่เหมาะสม ไม่ใช่การพยากรณ์จำนวนประชากรนกค่ะ”</p></div>
+</section>
+
+<section class="section">
+<h2>12. 8 ประโยคที่ห้ามพูดผิด</h2>
+<table><thead><tr><th>ไม่ควรพูด</th><th>ควรพูด</th></tr></thead><tbody>
+<tr><td>CV AUC 0.89 = แม่น 89%</td><td>CV AUC 0.89 = โมเดลจำแนก Presence/Background ได้ค่อนข้างดีในการ Cross-Validation</td></tr>
+<tr><td>Background = ไม่มีนก</td><td>Background = จุดสุ่มสำหรับเปรียบเทียบ</td></tr>
+<tr><td>HSI 0.9 = มีนก 90%</td><td>HSI = คะแนนความเหมาะสมจากโมเดล</td></tr>
+<tr><td>Gain 50% = นกเพิ่ม 50%</td><td>พื้นที่เหมาะสมเพิ่ม 50%</td></tr>
+<tr><td>จุด Scenario = ตำแหน่งนกจริงในอนาคต</td><td>Projected suitable location</td></tr>
+<tr><td>2030/2050/2070 คือค่าที่โปรแกรมพยากรณ์เอง</td><td>เป็น Scenario ที่ผู้ใช้กำหนด</td></tr>
+<tr><td>Variable Importance = สาเหตุทางชีววิทยา</td><td>ความสำคัญต่อประสิทธิภาพของโมเดล</td></tr>
+<tr><td>Change map = เส้นทางการย้ายถิ่น</td><td>การเปลี่ยนพื้นที่ที่โมเดลประเมินว่าเหมาะสม</td></tr>
+</tbody></table>
+</section>
+<p class="footer">HornbillCast Project Guide • จัดทำสำหรับการทำความเข้าใจระบบ การนำเสนอ และการเตรียมตอบคำถามกรรมการ</p>
+</div>
+</body>
+</html>
