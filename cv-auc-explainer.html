@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>เข้าใจ 5-fold Cross-Validation, AUC และ CV AUC</title>
+<style>
+:root{--bg:#f6f3ea;--card:#fffdf7;--ink:#25302a;--muted:#6f786f;--line:#ddd7c9;--teal:#2c7f82;--gold:#d6a62c;--green:#4d9a68;--red:#c45a4a;--blue:#4f78a6;--soft:#eef5f2}
+*{box-sizing:border-box}body{margin:0;font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.65}.wrap{max-width:1120px;margin:auto;padding:24px}
+.hero{background:linear-gradient(135deg,#244f52,#2e7f82);color:white;border-radius:22px;padding:34px 32px;box-shadow:0 12px 30px rgba(33,65,66,.16)}.hero h1{margin:0 0 8px;font-size:clamp(28px,4vw,46px);line-height:1.15}.hero p{margin:0;color:#e7f3f1;font-size:18px}.badge{display:inline-block;background:#f2c230;color:#3d3210;padding:6px 12px;border-radius:999px;font-weight:700;font-size:13px;margin-bottom:14px}
+.grid{display:grid;gap:18px}.grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}.grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}@media(max-width:800px){.grid-3,.grid-2{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 5px 16px rgba(45,48,44,.05)}h2{font-size:26px;margin:34px 0 14px}h3{margin-top:0;font-size:20px}.lead{font-size:18px;color:#34423b}
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:#fff;padding:16px;border-radius:16px;border:1px solid var(--line)}.step{background:var(--soft);border:1px solid #d8e7e2;border-radius:12px;padding:10px 14px;font-weight:700}.arrow{font-size:24px;color:var(--teal);font-weight:900}
+.big{font-size:34px;font-weight:800;color:var(--teal);line-height:1}.warning{background:#fff4e8;border:1px solid #f0c89d;border-left:6px solid #e89a43;padding:16px 18px;border-radius:14px}.good{background:#eef8f1;border:1px solid #cfe5d6;border-left:6px solid var(--green);padding:16px 18px;border-radius:14px}
+table{width:100%;border-collapse:collapse;background:white;border-radius:14px;overflow:hidden}th,td{padding:11px 12px;border-bottom:1px solid #ece7da;text-align:center}th{background:#eef5f2;color:#245b5d}
+.fold-buttons{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}.fold-buttons button{border:0;border-radius:999px;padding:9px 14px;background:#e9ece8;color:#34423b;cursor:pointer;font-weight:700}.fold-buttons button.active{background:var(--teal);color:white}
+.train-test{display:grid;grid-template-columns:1fr 1fr;gap:12px}.box{padding:15px;border-radius:14px;border:1px solid var(--line)}.train{background:#edf6ff}.test{background:#fff1ef}
+.mini-folds{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:10px}.mini-fold{padding:12px 4px;border-radius:9px;text-align:center;font-weight:700;background:#dceaf8}.mini-fold.testfold{background:#f7c4bd}
+.auc-scale{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.auc-item{padding:12px;border-radius:12px;text-align:center;border:1px solid var(--line);background:#fff}.auc-item b{display:block;font-size:20px}
+.formula{text-align:center;font-family:Consolas,monospace;font-size:24px;background:#1f2d2b;color:#f6fff9;padding:18px;border-radius:14px;overflow:auto}
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:14px}.no,.yes{padding:18px;border-radius:14px}.no{background:#fff0ee;border:1px solid #efc0b9}.yes{background:#edf8f0;border:1px solid #c8e3cf}.tag{font-weight:800;font-size:13px;padding:4px 9px;border-radius:999px;display:inline-block;margin-bottom:7px}.no .tag{background:#f6c8c1;color:#8f3025}.yes .tag{background:#cfead5;color:#27613a}
+.footer-note{color:var(--muted);font-size:14px;margin-top:28px}.callout{background:#f0f4ff;border:1px solid #cfd9f2;border-left:6px solid var(--blue);padding:16px 18px;border-radius:14px}.small{font-size:14px;color:var(--muted)}.center{text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+<section class="hero">
+<div class="badge">สำหรับอธิบายโครงงาน HornbillCast</div>
+<h1>5-fold Cross-Validation, AUC และ CV AUC คืออะไร?</h1>
+<p>อธิบายแบบง่าย ๆ ตั้งแต่ “แบ่งข้อมูล” → “ทดสอบโมเดล” → “อ่านค่า AUC” → “สรุปเป็น CV AUC”</p>
+</section>
+<h2>ภาพรวมก่อน</h2>
+<div class="flow"><div class="step">ข้อมูลพบนก + Background</div><div class="arrow">→</div><div class="step">แบ่ง 5 กลุ่ม</div><div class="arrow">→</div><div class="step">Train 4 / Test 1</div><div class="arrow">→</div><div class="step">คำนวณ AUC</div><div class="arrow">→</div><div class="step">ทำครบ 5 รอบ</div><div class="arrow">→</div><div class="step">เฉลี่ย = CV AUC</div></div>
+<h2>1) 5-fold Cross-Validation คืออะไร?</h2>
+<div class="grid grid-2"><div class="card"><h3>แนวคิดง่าย ๆ</h3><p class="lead">แบ่งข้อมูลเป็น <b>5 ส่วน</b> แล้วสลับกันว่า “ส่วนไหนใช้ฝึก” และ “ส่วนไหนใช้ทดสอบ”</p><div class="warning"><b>เปรียบเหมือนข้อสอบ</b><br>ถ้าใช้ข้อสอบชุดเดิมทั้งสอนและสอบ คะแนนสูงอาจหลอกเราได้ จึงต้องมีข้อมูลที่โมเดล “ไม่เคยเห็น” ไว้ทดสอบ</div></div><div class="card"><h3>ลองกดดูแต่ละรอบ</h3><div class="fold-buttons" id="foldButtons"></div><div class="mini-folds" id="miniFolds"></div><div class="train-test" style="margin-top:12px"><div class="box train"><b>Train</b><div id="trainText"></div></div><div class="box test"><b>Test</b><div id="testText"></div></div></div></div></div>
+<h2>2) ROC คืออะไร?</h2><div class="card"><p>โมเดลให้คะแนนความเหมาะสม เช่น 0.91, 0.72, 0.43, 0.18 แต่ต้องกำหนดว่า <b>คะแนนเท่าไรถึงจะถือว่าเหมาะสม</b></p><p><b>ROC Curve</b> คือกราฟที่ทดลอง threshold หลายค่า แล้วดูว่าโมเดลสามารถแยก <b>Presence</b> ออกจาก <b>Background</b> ได้ดีแค่ไหน</p><div class="callout"><b>จำง่าย:</b> ROC = ดูความสามารถในการแยกสองกลุ่มเมื่อเปลี่ยนเกณฑ์หลาย ๆ ค่า</div></div>
+<h2>3) AUC คืออะไร?</h2><div class="grid grid-3"><div class="card center"><div class="big">AUC</div><p><b>Area Under the ROC Curve</b></p><p>ตัวเลขสรุปจากกราฟ ROC</p></div><div class="card center"><div class="big">0.50</div><p>แยกได้พอ ๆ กับการสุ่ม</p></div><div class="card center"><div class="big">1.00</div><p>แยกได้สมบูรณ์ในข้อมูลที่ประเมิน</p></div></div>
+<div class="card" style="margin-top:18px"><h3>การตีความแบบคร่าว ๆ</h3><div class="auc-scale"><div class="auc-item"><b>0.50</b>ใกล้สุ่ม</div><div class="auc-item"><b>0.60–0.70</b>ค่อนข้างต่ำ</div><div class="auc-item"><b>0.70–0.80</b>พอใช้</div><div class="auc-item"><b>0.80–0.90</b>ดี</div><div class="auc-item"><b>&gt; 0.90</b>ดีมาก</div></div><p class="small">ช่วงนี้ใช้เพื่ออธิบายแบบง่าย ไม่ใช่กฎตายตัว</p></div>
+<h2>4) AUC = 0.89 หมายความว่าอย่างไร?</h2><div class="compare"><div class="no"><span class="tag">ไม่ควรพูด</span><p><b>“โมเดลแม่นยำ 89%”</b></p><p>เพราะ AUC ไม่ใช่ Accuracy</p></div><div class="yes"><span class="tag">ควรพูด</span><p><b>“โมเดลมีความสามารถค่อนข้างดีในการให้คะแนน Presence สูงกว่า Background”</b></p><p>หรือ “โมเดลจำแนกสองกลุ่มได้ดี”</p></div></div>
+<h2>5) CV AUC คืออะไร?</h2><div class="card"><p class="lead"><b>CV AUC = ค่า AUC เฉลี่ยที่ได้จาก Cross-Validation</b></p><table><thead><tr><th>Fold</th><th>AUC</th></tr></thead><tbody><tr><td>1</td><td>0.87</td></tr><tr><td>2</td><td>0.90</td></tr><tr><td>3</td><td>0.88</td></tr><tr><td>4</td><td>0.91</td></tr><tr><td>5</td><td>0.89</td></tr></tbody></table><div class="formula" style="margin-top:16px">CV AUC = (0.87 + 0.90 + 0.88 + 0.91 + 0.89) / 5 = 0.89</div></div>
+<h2>6) สำหรับ HornbillCast: Presence กับ Background</h2><div class="grid grid-2"><div class="card"><h3>Presence</h3><p>ตำแหน่งที่มีข้อมูลการพบนกจริง</p></div><div class="card"><h3>Background</h3><p>จุดพื้นหลังที่สุ่มจากพื้นที่ประเทศไทย เพื่อใช้เป็นกลุ่มเปรียบเทียบ</p></div></div><div class="warning" style="margin-top:14px"><b>สำคัญ:</b> Background ไม่ได้แปลว่า “ยืนยันว่าไม่มีนก” ดังนั้น AUC ในโครงงานนี้ควรอธิบายว่าเป็นความสามารถในการแยก <b>Presence</b> ออกจาก <b>Background</b></div>
+<h2>7) เกี่ยวข้องกับปี 2030 / 2050 / 2070 อย่างไร?</h2><div class="flow"><div class="step">สร้างโมเดลจากข้อมูลฐาน</div><div class="arrow">→</div><div class="step">ตรวจด้วย 5-fold CV</div><div class="arrow">→</div><div class="step">ดู CV AUC</div><div class="arrow">→</div><div class="step">นำโมเดลไปจำลอง Scenario</div></div><div class="good" style="margin-top:14px"><b>ดังนั้น:</b> CV AUC ไม่ใช่ “ความแม่นยำของปี 2030 หรือ 2050” แต่เป็นค่าที่ใช้ประเมินประสิทธิภาพของโมเดลก่อนนำไปใช้จำลองสถานการณ์อนาคต</div>
+<h2>8) ประโยคสำหรับพูดกับกรรมการ</h2><div class="card"><p><b>5-fold Cross-Validation:</b> “เราแบ่งข้อมูลออกเป็น 5 ส่วน ใช้ 4 ส่วนสร้างโมเดล และอีก 1 ส่วนทดสอบ ทำสลับกันจนครบ 5 รอบ เพื่อดูว่าโมเดลทำงานกับข้อมูลที่ไม่เคยเห็นได้ดีเพียงใด”</p><p><b>AUC:</b> “AUC เป็นค่าที่ใช้วัดความสามารถของโมเดลในการจำแนกตำแหน่งที่พบนกออกจากจุด Background โดยค่าที่เข้าใกล้ 1 แสดงว่าจำแนกได้ดีขึ้น”</p><p><b>CV AUC:</b> “คือค่า AUC เฉลี่ยจากการทดสอบทั้ง 5 รอบ จึงใช้สรุปประสิทธิภาพของโมเดลหลังทำ Cross-Validation”</p></div>
+<h2>สรุปจำง่าย 4 บรรทัด</h2><div class="grid grid-2"><div class="card"><b>5-fold CV</b><br>วิธีแบ่งข้อมูลเพื่อ “สอบโมเดล” 5 รอบ</div><div class="card"><b>ROC</b><br>กราฟดูการจำแนกเมื่อเปลี่ยน threshold</div><div class="card"><b>AUC</b><br>คะแนนสรุปจากกราฟ ROC</div><div class="card"><b>CV AUC</b><br>AUC เฉลี่ยจากการทดสอบ 5 รอบ</div></div><p class="footer-note">จัดทำเพื่อช่วยอธิบายขั้นตอนประเมินโมเดลของโครงงาน HornbillCast ให้เข้าใจง่ายสำหรับนักเรียนและการนำเสนอ</p>
+</div>
+<script>
+const folds=[1,2,3,4,5];const buttons=document.getElementById('foldButtons');const mini=document.getElementById('miniFolds');const trainText=document.getElementById('trainText');const testText=document.getElementById('testText');function renderFold(testFold){[...buttons.children].forEach((b,i)=>b.classList.toggle('active',folds[i]===testFold));mini.innerHTML=folds.map(f=>'<div class="mini-fold '+(f===testFold?'testfold':'')+'">Fold '+f+'</div>').join('');const train=folds.filter(f=>f!==testFold);trainText.textContent='Fold '+train.join(', ');testText.textContent='Fold '+testFold;}folds.forEach(f=>{const b=document.createElement('button');b.textContent='รอบ '+f;b.onclick=()=>renderFold(f);buttons.appendChild(b);});renderFold(5);
+</script>
+</body>
+</html>
